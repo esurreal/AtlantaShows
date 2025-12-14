@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import SessionLocal, Event, init_db
+from datetime import datetime
 from pydantic import BaseModel
 import os
 
