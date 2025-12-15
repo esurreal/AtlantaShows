@@ -17,7 +17,7 @@ app = FastAPI()
 origins = ["*",
     "http://127.0.0.1:50345", # <-- ADD THIS SPECIFIC DEBUGGER HOST/PORT
     "http://localhost:51412", # <-- ADD THIS LOCALHOST VARIANT
-    "http://127.0.0.1:9100",
+    "http://127.0.0.1",
     ] 
 
 app.add_middleware(
