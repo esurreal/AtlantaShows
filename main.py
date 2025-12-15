@@ -4,8 +4,8 @@ from datetime import datetime
 import os
 import uvicorn
 # Assuming these modules are in your root directory (or imported correctly)
-from database import fetch_events 
-from database import fetch_eventbrite_by_location, normalize_eventbrite 
+#from database import fetch_events 
+#from database import fetch_eventbrite_by_location, normalize_eventbrite 
 # Removed unnecessary flask/flask_cors imports
 
 # --- FastAPI Initialization ---
