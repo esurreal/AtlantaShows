@@ -3,4 +3,5 @@ uvicorn
 requests
 pydantic
 sqlalchemy
+asyncpg
 psycopg2-binary  # For connecting to PostgreSQL
