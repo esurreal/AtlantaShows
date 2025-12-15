@@ -4,14 +4,13 @@ import 'dart:convert';
 import 'dart:io';
 
 // 🛑 Replace this placeholder with your actual Railway URL 🛑
-// Example: 'https://atlantashows-production.up.railway.app'
-const String API_BASE_URL = 'https://atlantashows-production.up.railway.app/';
+const String API_BASE_URL = 'https://YOUR-RAILWAY-DOMAIN.up.railway.app';
 
 void main() {
   runApp(const AtlantaShowsApp());
 }
 
-// --- Data Model for a Single Show ---
+// --- Data Model for a Single Show (Pre-Null Safety) ---
 class Show {
   final String id;
   final String title;
@@ -19,27 +18,28 @@ class Show {
   final String date;
   final String imageUrl;
 
-  Show({
-    required this.id,
-    required this.title,
-    required this.venue,
-    required this.date,
-    required this.imageUrl,
-  });
+  Show({this.id, this.title, this.venue, this.date, this.imageUrl});
 
   factory Show.fromJson(Map<String, dynamic> json) {
+    // In pre-null safety, you must rely on the data being present or handle null
     return Show(
-      id: json['id'] ?? 'N/A',
-      title: json['title'] ?? 'No Title',
-      venue: json['venue'] ?? 'No Venue',
-      date: json['date'] ?? 'No Date',
-      imageUrl: json['imageUrl'] ?? 'https://via.placeholder.com/150',
+      id: json['id'],
+      title: json['title'],
+      venue: json['venue'],
+      date: json['date'],
+      imageUrl: json['imageUrl'],
     );
   }
 }
 
 // --- Fetching Logic ---
 Future<List<Show>> fetchShows() async {
+  // Check the URL for validity before trying to parse
+  if (API_BASE_URL
+      .contains('https://atlantashows-production.up.railway.app/')) {
+    throw Exception('API_BASE_URL is not set to your live Railway domain.');
+  }
+
   final apiUrl = Uri.parse('$API_BASE_URL/events');
   String errorDetails = 'Unknown error.';
 
@@ -49,14 +49,22 @@ Future<List<Show>> fetchShows() async {
     if (response.statusCode == 200) {
       // The server is running and returned data
       List jsonList = jsonDecode(response.body);
-      return jsonList.map((data) => Show.fromJson(data)).toList();
+      // Ensure the response is a list before mapping
+      if (jsonList is List) {
+        return jsonList.map((data) => Show.fromJson(data)).toList();
+      } else {
+        errorDetails = 'Server returned a single object, expected a list.';
+        throw Exception(errorDetails);
+      }
     } else {
       // Server is running, but returned an error status (e.g., 500)
-      errorDetails = 'Failed to load shows from backend. Status: ${response.statusCode}. Body: ${response.body.substring(0, response.body.length > 100 ? 100 : response.body.length)}...';
+      errorDetails =
+          'Failed to load shows from backend. Status: ${response.statusCode}. Body: ${response.body.substring(0, response.body.length > 100 ? 100 : response.body.length)}...';
       throw Exception(errorDetails);
     }
   } on SocketException {
-    errorDetails = 'Network/Host error: Failed host lookup or no internet connection.';
+    errorDetails =
+        'Network/Host error: Failed host lookup or no internet connection.';
     throw Exception(errorDetails);
   } on HttpException {
     errorDetails = 'HTTP error: Could not find the server.';
@@ -65,10 +73,6 @@ Future<List<Show>> fetchShows() async {
     errorDetails = 'JSON parsing error: Server returned invalid data.';
     throw Exception(errorDetails);
   } catch (e) {
-    // Catch any other exceptions, including the intentional ones thrown above
-    if (e is Exception) {
-      throw e; // Re-throw the custom exception
-    }
     errorDetails = 'Exception during connection: ${e.toString()}';
     throw Exception(errorDetails);
   }
@@ -76,7 +80,8 @@ Future<List<Show>> fetchShows() async {
 
 // --- Main Application Widget ---
 class AtlantaShowsApp extends StatelessWidget {
-  const AtlantaShowsApp({super.key});
+  // Pre-Null Safety Constructor
+  const AtlantaShowsApp({Key key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -92,18 +97,21 @@ class AtlantaShowsApp extends StatelessWidget {
 
 // --- Screen Widget to Display Data ---
 class ShowListScreen extends StatefulWidget {
-  const ShowListScreen({super.key});
+  // Pre-Null Safety Constructor
+  const ShowListScreen({Key key}) : super(key: key);
 
   @override
   State<ShowListScreen> createState() => _ShowListScreenState();
 }
 
 class _ShowListScreenState extends State<ShowListScreen> {
-  late Future<List<Show>> futureShows;
+  // Initialized now instead of using 'late'
+  Future<List<Show>> futureShows;
 
   @override
   void initState() {
     super.initState();
+    // Initialize the Future in initState, which is safe in pre-null safety
     futureShows = fetchShows();
   }
 
@@ -119,7 +127,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Atlanta Shows'),
-        actions: [
+        actions: <Widget>[
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _onRefresh,
@@ -136,13 +144,16 @@ class _ShowListScreenState extends State<ShowListScreen> {
               // Display the actual error details to the user for debugging
               return Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                children: <Widget>[
                   const Icon(Icons.error_outline, color: Colors.red, size: 60),
                   const Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       'CONNECTION FAILED',
-                      style: TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                   Padding(
@@ -163,16 +174,19 @@ class _ShowListScreenState extends State<ShowListScreen> {
             } else if (snapshot.hasData) {
               // Successfully received data
               return ListView.builder(
-                itemCount: snapshot.data!.length,
+                // No ! operator needed in pre-null safety
+                itemCount: snapshot.data.length,
                 itemBuilder: (context, index) {
-                  Show show = snapshot.data![index];
+                  // No ! operator needed in pre-null safety
+                  Show show = snapshot.data[index];
                   return ListTile(
-                    leading: show.imageUrl.isNotEmpty
-                        ? Image.network(show.imageUrl, width: 50, height: 50, fit: BoxFit.cover)
+                    leading: show.imageUrl != null
+                        ? Image.network(show.imageUrl,
+                            width: 50, height: 50, fit: BoxFit.cover)
                         : const Icon(Icons.music_note),
-                    title: Text(show.title),
-                    subtitle: Text('${show.venue} - ${show.date}'),
-                    // Add tap handling or navigation here if needed
+                    title: Text(show.title ?? 'Unknown Title'),
+                    subtitle: Text(
+                        '${show.venue ?? 'Unknown Venue'} - ${show.date ?? 'Unknown Date'}'),
                   );
                 },
               );
