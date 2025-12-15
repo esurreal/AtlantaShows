@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-from .database import fetch_events
+from database import fetch_events
 import os
 import uvicorn
 # Assuming these modules are in your root directory (or imported correctly)
