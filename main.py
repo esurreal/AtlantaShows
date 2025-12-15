@@ -13,7 +13,11 @@ app = FastAPI()
 
 # 🛑 1. CORS Middleware Setup (Fixes XMLHttpRequest error) 🛑
 # Allows requests from any origin (*) during development
-origins = ["*"] 
+origins = ["*",
+    "http://127.0.0.1:50345", # <-- ADD THIS SPECIFIC DEBUGGER HOST/PORT
+    "http://localhost:50345", # <-- ADD THIS LOCALHOST VARIANT
+    "http://127.0.0.1:9100",
+    ] 
 
 app.add_middleware(
     CORSMiddleware,
