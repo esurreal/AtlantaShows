@@ -39,11 +39,21 @@ class Event(Base):
     
     # Helper to convert to dictionary for FastAPI
     def to_dict(self):
+# 1. Check if the date_time field has a value
+        if self.date_time:
+            # 2. If it exists, format it to the ISO standard string
+            date_string = self.date_time.isoformat()
+        else:
+            # 3. If it does not exist (is None/NULL), use None
+            date_string = None
+            
         return {
             "id": str(self.id),
-            "title": self.name,  # Mapped 'name' to 'title' for Flutter
+            "title": self.name,
             "venue": self.venue_name,
-            "date": self.date_time.isoformat() if self.date_time else None,
+            
+            # --- CRITICAL FIX: Use the computed 'date_string' variable ---
+            "date": date_string,
             "imageUrl": "https://via.placeholder.com/150",
         }
 
