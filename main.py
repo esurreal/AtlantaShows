@@ -69,7 +69,7 @@ print("Database engine initialized successfully")
 async def get_events():
     # 🛑 CRITICAL FIX: Ensure fetch_events is awaited 🛑
     # It must be awaited since it's an async function (async def fetch_events)
-    events_data = await get_events() 
+    events_data = await fetch_events() 
     
     # Ensure a clean list is returned if no data is found (for Flutter compatibility)
     if not events_data:

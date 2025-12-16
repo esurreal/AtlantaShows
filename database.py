@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.future import select
+from datetime import datetime
 
 # --- Database Setup (Async) ---
 db_url = os.getenv("DATABASE_URL")
