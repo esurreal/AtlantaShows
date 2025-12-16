@@ -33,15 +33,6 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     # General catch-alls for local development
     "*", 
-    "http://localhost",
-    "http://127.0.0.1",
-    
-    # CRITICAL: Specific Flutter port to bypass tough browser security
-    "http://localhost:55267", 
-    "http://127.0.0.1:55267",
-    
-    # Add your deployed Railway URL if you had another frontend
-    "https://atlantashows-production.up.railway.app",
 ]
 
 # Apply CORS Middleware
