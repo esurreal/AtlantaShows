@@ -1,25 +1,50 @@
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
-from database import fetch_events
-import os
-import uvicorn
-# Assuming these modules are in your root directory (or imported correctly)
-#from database import fetch_events 
-#from database import fetch_eventbrite_by_location, normalize_eventbrite 
-# Removed unnecessary flask/flask_cors imports
+# Correct absolute imports for local files
+from database import init_db, fetch_events 
+from collector import fetch_and_save_events
 
-# --- FastAPI Initialization ---
-app = FastAPI()
+# --- Lifespan Function (Handles Startup/Shutdown) ---
+# This runs async functions (init_db, collector) before the server starts accepting requests
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. Initialize the database (creates tables)
+    print("Database initialization starting...")
+    await init_db() 
+    print("Database initialization complete.")
+    
+    # 2. RUN THE COLLECTOR TO POPULATE DATA
+    # This runs once on startup to ensure the database is not empty
+    print("Running initial data collector...")
+    await fetch_and_save_events()
+    print("Initial data collection complete.")
+    
+    yield
+    # Code to run on shutdown (if needed)
+    pass
+    
+# Initialize FastAPI app with the lifespan function
+app = FastAPI(lifespan=lifespan) 
 
-# 🛑 1. CORS Middleware Setup (Fixes XMLHttpRequest error) 🛑
-# Allows requests from any origin (*) during development
-origins = ["*",
-    "http://127.0.0.1:50345", # <-- ADD THIS SPECIFIC DEBUGGER HOST/PORT
-    "http://localhost:51412", # <-- ADD THIS LOCALHOST VARIANT
+# --- CORS Configuration (Finalized) ---
+# This allows your local Flutter web app and the live site to connect
+origins = [
+    # General catch-alls for local development
+    "*", 
+    "http://localhost",
     "http://127.0.0.1",
-    ] 
+    
+    # CRITICAL: Specific Flutter port to bypass tough browser security
+    "http://localhost:55267", 
+    "http://127.0.0.1:55267",
+    
+    # Add your deployed Railway URL if you had another frontend
+    "https://atlantashows-production.up.railway.app",
+]
 
+# Apply CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -27,67 +52,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ------------------------------
 
-# --- 2. Database Setup ---
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
 
-# Get the DATABASE_URL from environment variables
-db_url = os.getenv("DATABASE_URL")
-
-if not db_url:
-    # This will cause a fast crash if the environment variable is missing
-    raise RuntimeError(
-        "DATABASE_URL environment variable not set. "
-        "Please set it in Railway project variables."
-    )
-
-# Convert to async format for SQLAlchemy (assuming it's needed for other parts)
-async_db_url = db_url.replace("postgresql://", "postgresql+asyncpg://")
-
-# Create the async engine
-engine = create_async_engine(async_db_url, future=True)
-
-# Create a session factory for async sessions
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession
-)
-
-# Example usage function (Kept for consistency, though fetch_events is self-contained)
-async def get_session() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
-        yield session
-
-print("Database engine initialized successfully")
-
-# --- 3. API Endpoints ---
+# --- Endpoint Definition ---
+@app.get("/")
+async def read_root():
+    return {"message": "Atlanta Shows API is running!"}
 
 @app.get("/events")
 async def get_events():
-    # 🛑 CRITICAL FIX: Ensure fetch_events is awaited 🛑
-    # It must be awaited since it's an async function (async def fetch_events)
+    # This is the function that READS the data from the database
+    # It now correctly calls the fetch_events function from database.py
     events_data = await fetch_events() 
-    
-    # Ensure a clean list is returned if no data is found (for Flutter compatibility)
-    if not events_data:
-        return []
-        
     return events_data
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "time": datetime.utcnow().isoformat()}
-
-# --- 4. Uvicorn Execution Block ---
-# Note: Since your Railway command is 'uvicorn main:app ...', this block is less critical,
-# but it's good practice for local development.
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000)) 
-    
-    # 🛑 NOTE: The Uvicorn string here is 'main:app' because this file is in the root. 
-    # This is also what your successful Railway command should now be pointing to.
-    uvicorn.run("main:app", host="0.0.0.0", port=port)

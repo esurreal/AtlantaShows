@@ -44,7 +44,7 @@ class Event(Base):
             "title": self.name,  # Mapped 'name' to 'title' for Flutter
             "venue": self.venue_name,
             "date": self.date_time.isoformat() if self.date_time else None,
-            "imageUrl": None, # Placeholder for now
+            "imageUrl": "https://via.placeholder.com/150",
         }
 
 

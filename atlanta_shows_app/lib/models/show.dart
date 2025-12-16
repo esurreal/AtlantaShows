@@ -6,18 +6,16 @@ class Show {
   final String title;
   final String venue;
   final DateTime date;
-  final String imageUrl;
+  final String imageUrl; // Note: Your Python model doesn't supply this yet!
 
-  // Constructor with required parameters and compatible syntax (Flutter 2.10)
+  // Cleaned up constructor for a data model
   const Show({
     required this.id,
     required this.title,
     required this.venue,
     required this.date,
     required this.imageUrl,
-    Key? key, // Key is included for compatibility, but optional for data models
-  }) : super(); // 'super()' is used here to satisfy the constructor syntax
-
+  });
   // Static method to create a list of placeholder shows for testing
   static List<Show> get mockShows {
     return [
