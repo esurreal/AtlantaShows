@@ -52,13 +52,14 @@ class Event(Base):
 async def fetch_events():
     async with AsyncSessionLocal() as session:
         # Select all future events
-        stmt = select(Event).filter(Event.date_time >= datetime.now()).order_by(Event.date_time)
+        #stmt = select(Event).filter(Event.date_time >= datetime.now()).order_by(Event.date_time)
+         stmt = select(Event).order_by(Event.date_time)
         
-        result = await session.execute(stmt)
-        events = result.scalars().all()
+         result = await session.execute(stmt)
+         events = result.scalars().all()
         
         # Return a list of dictionaries that match the Flutter Show model
-        return [event.to_dict() for event in events]
+         return [event.to_dict() for event in events]
 
 # --- Init DB (Async) ---
 async def init_db():

@@ -9,6 +9,12 @@ init_db()
 TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY")
 BASE_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
 
+if not TICKETMASTER_API_KEY:
+    print("FATAL ERROR: TICKETMASTER_API_KEY is missing from environment!")
+    return # Exit the function if the key is missing
+
+BASE_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
+
 async def fetch_and_save_events():
     """Fetches events from Ticketmaster and saves/updates them in the database."""
     print("Starting Ticketmaster data collection...")
