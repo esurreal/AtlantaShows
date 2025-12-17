@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from typing import List
 
 # Import the necessary functions from your database file
-from .database import create_tables, fetch_events 
+from database import create_tables, fetch_events 
 
 # --- 1. FastAPI App Initialization ---
 app = FastAPI(title="Atlanta Shows API")
