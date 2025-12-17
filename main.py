@@ -8,20 +8,21 @@ from database import create_tables, fetch_events
 
 # --- 1. Pydantic Response Model ---
 class EventResponse(BaseModel):
-    # Field names match the JSON output you want
-    id: int
+    # 🚨 FIX 1: Explicitly define the 'id' field with its alias 🚨
+    id: int = Field(..., alias="id")
+    
     title: str = Field(..., alias="name")
     venue: str = Field(..., alias="venue_name")
     
-    # Correctly alias the date field to the database column
+    # Date field remains the same (it was already correctly aliased)
     date: date = Field(..., alias="date_time") 
     
+    # 🚨 FIX 2: Explicitly define the 'imageUrl' field with its alias 🚨
     imageUrl: str = Field(..., alias="ticket_url")
 
     class Config:
-        # 🚨 FIX FOR PYDANTIC V2: 'orm_mode' must be renamed to 'from_attributes' 🚨
-        from_attributes = True 
-
+        # Pydantic V2 configuration key
+        from_attributes = True
 # --- 2. FastAPI App Initialization ---
 app = FastAPI(title="Atlanta Shows API")
 
