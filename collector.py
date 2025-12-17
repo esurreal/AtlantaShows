@@ -131,4 +131,8 @@ if __name__ == "__main__":
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         # Exit with a non-zero code to signal failure to Railway
+<<<<<<< HEAD
         sys.exit(1)
+=======
+        sys.exit(1)
+>>>>>>> b26657dfc66ad7f0a98dbdf655094cf1daee3d91
