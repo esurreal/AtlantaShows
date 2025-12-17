@@ -34,25 +34,6 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(String)
     
-    # Helper to convert to dictionary for FastAPI
-    def to_dict(self):
-        # We must format the date to a string the Flutter app expects (YYYY-MM-DD)
-        if self.date_time:
-            # .isoformat() works perfectly for the date object
-            date_string = self.date_time.isoformat()
-        else:
-            date_string = None
-            
-        return {
-            "id": str(self.id),
-            "title": self.name,
-            "venue": self.venue_name,
-            "date": date_string, # Clean YYYY-MM-DD string
-            "imageUrl": "https://via.placeholder.com/150",
-        }
-
-
-# --- Init DB Function ---
 def create_tables():
     """Creates the tables defined in Base.metadata (the 'events' table)."""
     Base.metadata.create_all(bind=engine)
@@ -72,6 +53,6 @@ def fetch_events():
         events = result.scalars().all()
         
         # Convert to the list of dictionaries for the API response
-        return [event.to_dict() for event in events]
+        return events
     finally:
         db.close()
