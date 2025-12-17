@@ -1,28 +1,22 @@
-# database.py (or models.py, if you prefer)
-
 import os
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.future import select
+from sqlalchemy import create_engine, Column, Integer, String, Date, select
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from datetime import datetime
 
-# --- Database Setup (Async) ---
+# --- Database Setup (Synchronous) ---
 db_url = os.getenv("DATABASE_URL")
 if not db_url:
+    # IMPORTANT: Ensure your Railway environment variable is correctly named DATABASE_URL
     raise RuntimeError("DATABASE_URL environment variable not set.")
     
-# Convert to async format for SQLAlchemy
-async_db_url = db_url.replace("postgresql://", "postgresql+asyncpg://")
+# Create the synchronous engine
+engine = create_engine(db_url) 
 
-# Create the async engine
-engine = create_async_engine(async_db_url, future=True)
-
-# Create a session factory for async sessions
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession
+# Create a session factory
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
 )
 
 # --- Model Definition ---
@@ -33,45 +27,51 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     tm_id = Column(String, unique=True, index=True) 
     name = Column(String, index=True)
-    date_time = Column(DateTime)
+    
+    # 🌟 THE CRITICAL FIX: PostgreSQL DATE type 🌟
+    date_time = Column(Date) 
+    
     venue_name = Column(String)
     ticket_url = Column(String)
     
     # Helper to convert to dictionary for FastAPI
     def to_dict(self):
-# 1. Check if the date_time field has a value
+        # We must format the date to a string the Flutter app expects (YYYY-MM-DD)
         if self.date_time:
-            # 2. If it exists, format it to the ISO standard string
+            # .isoformat() works perfectly for the date object
             date_string = self.date_time.isoformat()
         else:
-            # 3. If it does not exist (is None/NULL), use None
             date_string = None
             
         return {
             "id": str(self.id),
             "title": self.name,
             "venue": self.venue_name,
-            
-            # --- CRITICAL FIX: Use the computed 'date_string' variable ---
-            "date": date_string,
+            "date": date_string, # Clean YYYY-MM-DD string
             "imageUrl": "https://via.placeholder.com/150",
         }
 
 
-# --- Fetch Events Function (Async) ---
-async def fetch_events():
-    async with AsyncSessionLocal() as session:
-        # Select all future events
-        #stmt = select(Event).filter(Event.date_time >= datetime.now()).order_by(Event.date_time)
-         stmt = select(Event).order_by(Event.date_time)
-        
-         result = await session.execute(stmt)
-         events = result.scalars().all()
-        
-        # Return a list of dictionaries that match the Flutter Show model
-         return [event.to_dict() for event in events]
+# --- Init DB Function ---
+def create_tables():
+    """Creates the tables defined in Base.metadata (the 'events' table)."""
+    Base.metadata.create_all(bind=engine)
 
-# --- Init DB (Async) ---
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+# --- Data Fetch Function (Synchronous) ---
+def fetch_events():
+    """Connects to DB, retrieves all events, and closes the connection."""
+    db = SessionLocal() # Get a new session
+    try:
+        # Build the query statement
+        stmt = select(Event).order_by(Event.date_time)
+        
+        # Execute the query on the synchronous session
+        result = db.execute(stmt)
+        
+        # Extract the Event objects
+        events = result.scalars().all()
+        
+        # Convert to the list of dictionaries for the API response
+        return [event.to_dict() for event in events]
+    finally:
+        db.close()
