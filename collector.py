@@ -34,14 +34,20 @@ def fetch_and_save_events():
     # 3. Initialize Synchronous DB Session
     # We use the standard synchronous SessionLocal from database.py
     db = SessionLocal() 
-    
+
     try:
+        # 🚨 TEMPORARY: DELETE ALL EXISTING DATA 🚨
+        print("--- 2a. Deleting all existing events for full refresh... ---")
+        db.query(Event).delete()
+        db.commit() # Commit the deletion immediately
+    
+        
         # 4. Fetch Data from Ticketmaster
         print("--- 2. Fetching data from Ticketmaster API... ---")
         response = requests.get(BASE_URL, params=params)
         response.raise_for_status() # Raise exception for bad status codes (4xx or 5xx)
         data = response.json()
-        
+            
         events_data = data.get('_embedded', {}).get('events', [])
         print(f"--- 3. Found {len(events_data)} events to process. ---")
         
