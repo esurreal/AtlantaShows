@@ -62,15 +62,15 @@ def fetch_and_save_events():
             # --- 🌟 THE CRITICAL FIXES 🌟 ---
             
             # 5a. Extract DateTime String
-            date_time_str = event.get('dates', {}).get('start', {}).get('localDateTime')
+            date_str = event.get('dates', {}).get('start', {}).get('localDate')
             
             # 5b. Convert to Python DATE object (required for the PostgreSQL DATE type)
             event_date = None
-            if date_time_str:
-                # Parse the full ISO format string (e.g., '2025-12-16T20:00:00')
-                full_datetime_obj = datetime.fromisoformat(date_time_str)
-                # 🚨 Take ONLY the date part to match the database schema
-                event_date = full_datetime_obj.date() 
+            if date_str:
+                try:
+                    event_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                except Exception as e:
+                    print(f"Error parsing date for {event_name}: {e}")
             
             # 5c. Extract Venue and URL
             venue = event.get('_embedded', {}).get('venues', [{}])[0]
