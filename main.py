@@ -1,58 +1,42 @@
-import os
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-# Correct absolute imports for local files
-from database import init_db, fetch_events 
-from collector import fetch_and_save_events
+from fastapi import FastAPI, HTTPException
+from typing import List
 
-# --- Lifespan Function (Handles Startup/Shutdown) ---
-# This runs async functions (init_db, collector) before the server starts accepting requests
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 1. Initialize the database (creates tables)
-    print("Database initialization starting...")
-    await init_db() 
-    print("Database initialization complete.")
-    
-    # 2. RUN THE COLLECTOR TO POPULATE DATA
-    # This runs once on startup to ensure the database is not empty
-    print("Running initial data collector...")
-    await fetch_and_save_events()
-    print("Initial data collection complete.")
-    
-    yield
-    # Code to run on shutdown (if needed)
-    pass
-    
-# Initialize FastAPI app with the lifespan function
-app = FastAPI(lifespan=lifespan) 
+# Import the necessary functions from your database file
+from .database import create_tables, fetch_events 
 
-# --- CORS Configuration (Finalized) ---
-# This allows your local Flutter web app and the live site to connect
-origins = [
-    # General catch-alls for local development
-    "*", 
-]
+# --- 1. FastAPI App Initialization ---
+app = FastAPI(title="Atlanta Shows API")
 
-# Apply CORS Middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- 2. Startup Event Handler (The Fix Trigger) ---
+@app.on_event("startup")
+def startup_event():
+    """
+    Called once when the application starts. 
+    This is where the new, correct 'events' table schema is applied 
+    to your Railway PostgreSQL database.
+    """
+    print("Application startup: Creating database tables...")
+    create_tables()
+    print("Database tables created successfully.")
 
-
-# --- Endpoint Definition ---
+# --- 3. Root Route (Optional Check) ---
 @app.get("/")
-async def read_root():
+def read_root():
     return {"message": "Atlanta Shows API is running!"}
 
-@app.get("/events")
-async def get_events():
-    # This is the function that READS the data from the database
-    # It now correctly calls the fetch_events function from database.py
-    events_data = await fetch_events() 
-    return events_data
+# --- 4. Main API Endpoint for Flutter App (Synchronous) ---
+@app.get("/events", response_model=List[dict])
+def get_all_events():
+    """
+    Fetches all events from the database and returns the data 
+    as a list of dictionaries.
+    """
+    try:
+        # Call the synchronous fetch_events function
+        events_data = fetch_events() 
+        
+        return events_data
+    except Exception as e:
+        # Log the error and return a 500 status if the fetch fails
+        print(f"Error fetching events: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error while fetching events.")
