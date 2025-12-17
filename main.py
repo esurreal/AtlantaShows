@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException
 from typing import List, Optional
 from datetime import date # Needed for date type hint
 from pydantic import BaseModel, Field # Pydantic model imports
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 
 # Import the necessary functions from your database file
 from database import create_tables, fetch_events 
@@ -31,6 +34,13 @@ class EventResponse(BaseModel):
         from_attributes = True
 # --- 2. FastAPI App Initialization ---
 app = FastAPI(title="Atlanta Shows API")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 2. Serve index.html at the very base URL
+@app.get("/")
+async def read_index():
+    return FileResponse(os.path.join('static', 'index.html'))
 
 # --- 3. Startup Event Handler ---
 @app.on_event("startup")
