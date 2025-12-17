@@ -114,25 +114,20 @@ def fetch_and_save_events():
 # --- Main Execution Block with Guaranteed Error Logging ---
 if __name__ == "__main__":
     try:
-        print("\n==============================================")
         print("  STARTING EVENT COLLECTOR (Log Guard Active) ")
-        print("==============================================")
+
         
         fetch_and_save_events() 
         
-        print("\n==============================================")
+
         print("    COLLECTOR FINISHED SUCCESSFULLY (No Crash)  ")
-        print("==============================================")
+
 
     except Exception as e:
         # 🚨 THIS BLOCK ENSURES THE ERROR IS PRINTED TO RAILWAY LOGS 🚨
-        print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", file=sys.stderr)
+
         print(f"FATAL UNCAUGHT EXCEPTION IN COLLECTOR: {e}", file=sys.stderr)
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", file=sys.stderr)
+
         traceback.print_exc(file=sys.stderr)
         # Exit with a non-zero code to signal failure to Railway
-<<<<<<< HEAD
         sys.exit(1)
-=======
-        sys.exit(1)
->>>>>>> b26657dfc66ad7f0a98dbdf655094cf1daee3d91

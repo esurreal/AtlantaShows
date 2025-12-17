@@ -7,21 +7,22 @@ from pydantic import BaseModel, Field # Pydantic model imports
 from database import create_tables, fetch_events 
 
 # --- 1. Pydantic Response Model ---
+# In main.py, replace the existing class EventResponse(...)
 class EventResponse(BaseModel):
-    # 🚨 FIX 1: Explicitly define the 'id' field with its alias 🚨
-    id: int = Field(..., alias="id")
+    # Use different internal names (e.g., event_id) and map them
+    # to the required JSON names (id, title, etc.)
     
-    title: str = Field(..., alias="name")
-    venue: str = Field(..., alias="venue_name")
+    event_id: int = Field(..., alias="id")
+    event_title: str = Field(..., alias="name")
+    event_venue: str = Field(..., alias="venue_name")
     
-    # Date field remains the same (it was already correctly aliased)
-    date: date = Field(..., alias="date_time") 
+    # This maps 'date_time' from the DB to the JSON key 'date'
+    event_date: date = Field(..., alias="date_time") 
     
-    # 🚨 FIX 2: Explicitly define the 'imageUrl' field with its alias 🚨
-    imageUrl: str = Field(..., alias="ticket_url")
+    event_image_url: str = Field(..., alias="ticket_url")
 
     class Config:
-        # Pydantic V2 configuration key
+        # Crucial Pydantic V2 setting for SQLAlchemy ORM objects
         from_attributes = True
 # --- 2. FastAPI App Initialization ---
 app = FastAPI(title="Atlanta Shows API")
