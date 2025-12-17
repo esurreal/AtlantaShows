@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from typing import List
+from typing import List, Optional
 from datetime import date # Needed for date type hint
 from pydantic import BaseModel, Field # Pydantic model imports
 
@@ -17,7 +17,12 @@ class EventResponse(BaseModel):
     event_venue: str = Field(..., alias="venue_name")
     
     # This maps 'date_time' from the DB to the JSON key 'date'
-    event_date: date = Field(..., alias="date_time") 
+    event_date: Optional[date] = Field(None, alias="date_time") 
+    
+    event_image_url: str = Field(..., alias="ticket_url")
+
+    class Config:
+        from_attributes = True 
     
     event_image_url: str = Field(..., alias="ticket_url")
 
