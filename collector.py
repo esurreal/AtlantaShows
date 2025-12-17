@@ -36,12 +36,6 @@ def fetch_and_save_events():
     db = SessionLocal() 
 
     try:
-        # 🚨 TEMPORARY: DELETE ALL EXISTING DATA 🚨
-        print("--- 2a. Deleting all existing events for full refresh... ---")
-        db.query(Event).delete()
-        db.commit() # Commit the deletion immediately
-    
-        
         # 4. Fetch Data from Ticketmaster
         print("--- 2. Fetching data from Ticketmaster API... ---")
         response = requests.get(BASE_URL, params=params)
