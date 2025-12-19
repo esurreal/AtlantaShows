@@ -1,7 +1,10 @@
 import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Date, select
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from datetime import datetime
+
+load_dotenv()
 
 # --- Database Setup (Synchronous) ---
 db_url = os.getenv("DATABASE_URL")
