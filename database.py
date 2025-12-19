@@ -1,19 +1,27 @@
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, Date, select
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from datetime import datetime
 
+# 1. Load the variables
 load_dotenv()
 
-# --- Database Setup (Synchronous) ---
-db_url = os.getenv("DATABASE_URL")
-if not db_url:
-    # IMPORTANT: Ensure your Railway environment variable is correctly named DATABASE_URL
-    raise RuntimeError("DATABASE_URL environment variable not set.")
-    
-# Create the synchronous engine
-engine = create_engine(db_url) 
+# 2. Grab the URL from the environment
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# 3. Handle the case where it might be missing
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set in environment variables!")
+
+# 4. Create the engine with the 'sturdy' settings we discussed
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
 # Create a session factory
 SessionLocal = sessionmaker(
