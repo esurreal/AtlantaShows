@@ -35,19 +35,10 @@ def create_tables():
 
 # --- Data Fetch Function (Synchronous) ---
 def fetch_events():
-    """Connects to DB, retrieves all events, and closes the connection."""
-    db = SessionLocal() # Get a new session
+    db = SessionLocal()
     try:
-        # Build the query statement
-        stmt = select(Event).order_by(Event.date_time)
-        
-        # Execute the query on the synchronous session
-        result = db.execute(stmt)
-        
-        # Extract the Event objects
-        events = result.scalars().all()
-        
-        # Convert to the list of dictionaries for the API response
+        # Simple query syntax is safer for this setup
+        events = db.query(Event).order_by(Event.date_time.asc()).all()
         return events
     finally:
         db.close()

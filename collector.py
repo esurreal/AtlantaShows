@@ -1,129 +1,96 @@
-import requests
 import os
-import sys
-import traceback
+from dotenv import load_dotenv
+from database import SessionLocal, Event
+from scraper_earl import scrape_the_earl
+import requests
 from datetime import datetime
-from sqlalchemy import select, update
-from dotenv import load_dotenv 
 
-# 1. Correct Import (No .py)
-from scraper_earl import scrape_the_earl 
-from database import SessionLocal, Event 
-
+# Load environment variables
 load_dotenv()
 
-TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY")
-EVENTBRITE_TOKEN = os.getenv("EVENTBRITE_TOKEN")
-BASE_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
-
-def get_eventbrite_events():
-    """Helper to fetch from Eventbrite API"""
-    if not EVENTBRITE_TOKEN:
-        return []
-    print("--- 2b. Fetching data from Eventbrite API... ---")
-    url = "https://www.eventbriteapi.com/v3/destination/events/"
-    headers = {"Authorization": f"Bearer {EVENTBRITE_TOKEN}"}
-    params = {"event_search.type": "music", "location.address": "atlanta", "expand": "venue"}
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json().get('events', [])
-    except Exception as e:
-        print(f"Eventbrite API Error: {e}")
-        return []
-
-def fetch_and_save_events():
-    print("--- 1. Starting data collection... ---")
-    if not TICKETMASTER_API_KEY:
-        raise ValueError("FATAL ERROR: TICKETMASTER_API_KEY is missing!")
-    
-    db = SessionLocal() 
-    updated_count = 0
-    inserted_count = 0
+def fetch_ticketmaster_events():
+    print("--- 2a. Fetching Ticketmaster... ---")
+    # Using your existing TM logic here
+    # (Assuming you have your TM_API_KEY in your .env)
+    API_KEY = os.getenv("TICKETMASTER_API_KEY")
+    url = f"https://app.ticketmaster.com/discovery/v2/events.json?classificationName=music&city=Atlanta&apikey={API_KEY}"
 
     try:
-        # --- FETCH ALL SOURCES ---
-        # TM
-        print("--- 2a. Fetching Ticketmaster... ---")
-        tm_params = {'apikey': TICKETMASTER_API_KEY, 'city': 'Atlanta', 'segmentName': 'Music', 'size': 50}
-        tm_response = requests.get(BASE_URL, params=tm_params)
-        tm_events = tm_response.json().get('_embedded', {}).get('events', [])
-
-        # EB
-        eb_events = get_eventbrite_events()
-
-        # DIY (The Earl)
-        earl_events = scrape_the_earl()
-
-        # --- COMBINE SOURCES (Corrected Logic) ---
-        all_events = (
-            [(e, 'TM') for e in tm_events] + 
-            [(e, 'EB') for e in eb_events] + 
-            [(e, 'DIY') for e in earl_events]
-        )
+        r = requests.get(url)
+        data = r.json()
+        raw_events = data.get('_embedded', {}).get('events', [])
         
-        print(f"--- 3. Processing {len(all_events)} total events. ---")
-
-        for event, source in all_events:
-            try:
-                if source == 'TM':
-                    tm_id = event.get('id')
-                    event_name = event.get('name')
-                    date_str = event.get('dates', {}).get('start', {}).get('localDate')
-                    venue_name = event.get('_embedded', {}).get('venues', [{}])[0].get('name')
-                    ticket_url = event.get('url')
-                
-                elif source == 'EB':
-                    tm_id = f"eb_{event.get('id')}"
-                    event_name = event.get('name', {}).get('text')
-                    date_str = event.get('start', {}).get('local', '').split('T')[0]
-                    venue_name = "Eventbrite Venue"
-                    ticket_url = event.get('url')
-                
-                else: # source == 'DIY' (The Earl)
-                    tm_id = event.get('tm_id') # We already set this in scraper_earl.py
-                    event_name = event.get('name')
-                    event_date = event.get('date_time') # It's already a date object!
-                    venue_name = event.get('venue_name')
-                    ticket_url = event.get('ticket_url')
-                    # Skip the string conversion for DIY since we did it in the scraper
-                    date_str = None 
-
-                # Convert date if it hasn't been converted yet
-                if source != 'DIY' and date_str:
-                    event_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-
-                event_dict = {
-                    "name": event_name,
-                    "date_time": event_date, 
-                    "venue_name": venue_name,
-                    "ticket_url": ticket_url
-                }
-
-                # Upsert Logic
-                stmt = select(Event).where(Event.tm_id == tm_id)
-                existing_event = db.scalar(stmt)
-
-                if existing_event:
-                    db.execute(update(Event).where(Event.tm_id == tm_id).values(**event_dict))
-                    updated_count += 1
-                else:
-                    new_event = Event(tm_id=tm_id, **event_dict)
-                    db.add(new_event)
-                    inserted_count += 1
-                    
-            except Exception as e:
-                print(f"Skipping event {source}: {e}")
-                continue
-
-        db.commit()
-        print(f"--- 4. Final Sync: +{inserted_count} new, ~{updated_count} updated. ---")
-
+        cleaned = []
+        for e in raw_events:
+            cleaned.append({
+                "tm_id": e['id'],
+                "name": e['name'],
+                "venue_name": e['_embedded']['venues'][0]['name'],
+                "date_time": datetime.strptime(e['dates']['start']['localDate'], '%Y-%m-%d').date(),
+                "ticket_url": e['url']
+            })
+        return cleaned
     except Exception as e:
-        db.rollback()
-        raise e
-    finally:
-        db.close()
+        print(f"Ticketmaster Error: {e}")
+        return []
+
+def sync_to_db(all_events):
+    db = SessionLocal()
+    new_count = 0
+    updated_count = 0
+    seen_ids = set() # Track IDs in this specific run
+    
+    for event_data, source in all_events:
+        eid = event_data['tm_id']
+        
+        # Skip if we already processed this ID in this current loop
+        if eid in seen_ids:
+            continue
+        seen_ids.add(eid)
+
+        # Look for existing event in the actual database
+        existing_event = db.query(Event).filter(Event.tm_id == eid).first()
+        
+        if existing_event:
+            existing_event.name = event_data['name']
+            existing_event.venue_name = event_data['venue_name']
+            existing_event.date_time = event_data['date_time']
+            existing_event.ticket_url = event_data['ticket_url']
+            updated_count += 1
+        else:
+            new_event = Event(**event_data)
+            db.add(new_event)
+            new_count += 1
+            
+    db.commit()
+    db.close()
+    print(f"--- 4. Final Sync: +{new_count} new, ~{updated_count} updated. ---")
 
 if __name__ == "__main__":
-    fetch_and_save_events()
+    print("--- 1. Starting data collection... ---")
+    
+    # 1. Get Ticketmaster shows
+    tm_events = fetch_ticketmaster_events()
+    print(f"Fetched {len(tm_events)} Ticketmaster events.")
+    
+    # 2. Get The Earl shows
+    print("--- 2b. Scraping The Earl (EAV)... ---")
+    try:
+        earl_events = scrape_the_earl()
+        print(f"Scraped {len(earl_events)} shows from The Earl.")
+    except Exception as e:
+        print(f"Earl Scraper failed: {e}")
+        earl_events = []
+
+    # 3. Combine them
+    # We create a list of tuples: (data_dict, source_label)
+    combined_list = []
+    for e in tm_events:
+        combined_list.append((e, 'TM'))
+    for e in earl_events:
+        combined_list.append((e, 'DIY'))
+        
+    print(f"--- 3. Processing {len(combined_list)} total events. ---")
+    
+    # 4. Save to Database
+    sync_to_db(combined_list)

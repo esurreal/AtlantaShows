@@ -11,12 +11,13 @@
         
         .container { max-width: 1000px; margin: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
+        /* Fixed Background and Text Colors */
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; transition: transform 0.2s; }
         .card:hover { transform: translateY(-5px); }
         
         .date { font-weight: bold; color: var(--primary); font-size: 0.9rem; margin-bottom: 8px; }
-        .name { font-size: 1.2rem; margin: 0 0 10px 0; color: #333; flex-grow: 1; }
-        .venue { color: #666; font-size: 0.9rem; margin-bottom: 20px; }
+        .name { font-size: 1.2rem; margin: 0 0 10px 0; color: #222; flex-grow: 1; }
+        .venue { color: #555; font-size: 0.9rem; margin-bottom: 20px; }
         
         .btn { background: var(--primary); color: white; text-decoration: none; text-align: center; padding: 10px; border-radius: 6px; font-weight: bold; }
     </style>
@@ -33,19 +34,46 @@
 
 <script>
     async function loadEvents() {
-        const response = await fetch('/events');
-        const events = await response.json();
-        const container = document.getElementById('event-container');
-        
-        container.innerHTML = events.map(event => `
-            <div class="card">
-                <div class="date">${new Date(event.date_time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-                <h3 class="name">${event.name}</h3>
-                <div class="venue">📍 ${event.venue_name}</div>
-                <a href="${event.ticket_url}" target="_blank" class="btn">Get Tickets</a>
-            </div>
-        `).join('');
+        try {
+            const response = await fetch('/events');
+            const events = await response.json();
+            const container = document.getElementById('event-container');
+            
+            if (events.length === 0) {
+                container.innerHTML = "<p>No shows found. Run the collector!</p>";
+                return;
+            }
+
+            container.innerHTML = events.map(event => {
+                let formattedDate = 'Date TBA';
+                
+                if (event.event_date) { // Ensure this matches your API key name
+                    // Split "2025-12-25" into parts to avoid timezone shifting
+                    const [year, month, day] = event.event_date.split('-');
+                    const dateObj = new Date(year, month - 1, day); 
+                    
+                    formattedDate = dateObj.toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                }
+
+                return `
+                    <div class="card">
+                        <div class="date">${formattedDate}</div>
+                        <h3 class="name">${event.event_title}</h3>
+                        <div class="venue">📍 ${event.event_venue}</div>
+                        <a href="${event.event_image_url}" target="_blank" class="btn">Get Tickets</a>
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error("Error loading events:", error);
+            document.getElementById('event-container').innerHTML = "<p>Error loading data.</p>";
+        }
     }
+    
     loadEvents();
 </script>
 
