@@ -11,7 +11,7 @@ from database import create_tables, fetch_events
 
 # --- 1. Pydantic Response Model ---
 class EventResponse(BaseModel):
-    event_id: int = Field(..., alias="id")
+    event_id: str = Field(..., alias="id")
     event_title: str = Field(..., alias="name")
     event_venue: str = Field(..., alias="venue_name")
     # Change this to str to "freeze" the date
