@@ -47,19 +47,20 @@ def create_tables():
 def fetch_events():
     db = SessionLocal()
     try:
+        # Get all shows sorted by date
         events = db.query(Event).order_by(Event.date_time.asc()).all()
-        result = []
+        
+        formatted_events = []
         for e in events:
-            result.append({
+            # These keys match the 'alias' names in your EventResponse model
+            # Your JavaScript is looking for these exact words
+            formatted_events.append({
                 "id": str(e.tm_id),
                 "name": e.name,
                 "venue_name": e.venue_name,
                 "date_time": e.date_time,
                 "ticket_url": e.ticket_url
             })
-        return result
-    except Exception as e:
-        print(f"Database Query Error: {e}")
-        return []
+        return formatted_events
     finally:
         db.close()
