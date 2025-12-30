@@ -59,28 +59,49 @@ def fetch_ticketmaster():
 # --- 3. The Earl Scraper ---
 def scrape_the_earl():
     events = []
+    print("Scraping The Earl via Bandsintown...")
     with sync_playwright() as p:
         try:
-            # Headless shell is required for Railway environments
+            # Launch browser
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            context = browser.new_context(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36')
+            page = context.new_page()
+            
+            # The Earl's Bandsintown URL
             url = "https://www.bandsintown.com/v/10001781-the-earl"
             
+            # Increase timeout and wait for the network to be quiet
             page.goto(url, wait_until="networkidle", timeout=60000)
+            
+            # Look for the JSON data specifically
+            # We'll try to find any script tag containing "Event"
+            page.wait_for_selector('script[type="application/ld+json"]', timeout=10000)
             scripts = page.locator('script[type="application/ld+json"]').all()
 
             for script in scripts:
                 content = script.evaluate("node => node.textContent").strip()
                 if not content: continue
-                data = json.loads(content)
+                
+                try:
+                    data = json.loads(content)
+                except:
+                    continue
+
+                # Bandsintown often nests events in a @graph list
                 items = data.get('@graph', [data]) if isinstance(data, dict) else data
+                if not isinstance(items, list): items = [items]
 
                 for item in items:
-                    if isinstance(item, dict) and 'startDate' in item:
+                    if isinstance(item, dict) and item.get('@type') == 'Event':
                         name = item.get('name', '')
                         start_str = item.get('startDate', '').split('T')[0]
+                        
+                        # Clean up the name (remove "at The Earl")
                         clean_name = re.sub(r'(\s*@\s*The\s*EARL.*|\s+at\s+The\s+EARL.*)', '', name, flags=re.I).strip()
-                        if clean_name.upper() == "THE EARL": continue
+                        
+                        # Skip entries that are just the venue name
+                        if clean_name.upper() == "THE EARL" or not clean_name: 
+                            continue
                         
                         event_date = datetime.strptime(start_str, "%Y-%m-%d").date()
                         events.append({
@@ -90,10 +111,14 @@ def scrape_the_earl():
                             "venue_name": "The Earl",
                             "ticket_url": item.get('url', url)
                         })
+            
             browser.close()
         except Exception as e:
-            print(f"Earl Scraper error: {e}")
-    return events
+            print(f"Earl Scraper error: {str(e)}")
+    
+    # Deduplicate in case the script found the same event twice in the JSON
+    unique_events = {e['tm_id']: e for e in events}.values()
+    return list(unique_events)
 
 # --- 4. Sync to DB ---
 def sync_to_db(combined_list):
