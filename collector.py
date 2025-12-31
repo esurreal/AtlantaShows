@@ -19,6 +19,7 @@ class Event(Base):
     ticket_url = Column(Text)
 
 # DATABASE LOGIC
+# Priority: Public URL (for local runs) -> Internal URL (for Railway Cron) -> Local SQLite
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 if "postgres://" in raw_db_url:
     db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
@@ -33,7 +34,7 @@ def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
     if not api_key:
-        print("Warning: TM_API_KEY not found.")
+        print("Warning: TM_API_KEY not found in environment variables.")
         return events
 
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=50"
@@ -52,7 +53,7 @@ def fetch_ticketmaster():
         print(f"Ticketmaster error: {e}")
     return events
 
-# --- 3. The Earl Scraper (Fast-Load Mode) ---
+# --- 3. The Earl Scraper (Stealth & Brute Force) ---
 def scrape_the_earl():
     found_events = []
     print("Scraping The Earl via Bandsintown...")
@@ -65,18 +66,24 @@ def scrape_the_earl():
             page = context.new_page()
             url = "https://www.bandsintown.com/v/10001781-the-earl"
             
+            # Fast-load strategy: wait for HTML, then let JS breathe
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(7000) 
             
             scripts = page.locator('script').all()
+            print(f"DEBUG: Analyzing {len(scripts)} scripts for Earl data...")
+
             for script in scripts:
                 content = script.evaluate("node => node.textContent").strip()
-                if '"startDate"' not in content: continue
+                if '"startDate"' not in content:
+                    continue
                 
                 try:
+                    # Strip CDATA tags if present
                     content = re.sub(r'^\s*//<!\[CDATA\[|//\]\]>\s*$', '', content)
                     data = json.loads(content)
                     
+                    # Flatten JSON structure to find event items
                     to_check = []
                     if isinstance(data, dict):
                         if "@graph" in data: to_check.extend(data["@graph"])
@@ -87,6 +94,7 @@ def scrape_the_earl():
                     for item in to_check:
                         if isinstance(item, dict) and 'name' in item and 'startDate' in item:
                             raw_name = item.get('name', '')
+                            # Ignore entries that are just the venue name
                             if not raw_name or raw_name.upper() == "THE EARL":
                                 continue
                                 
@@ -95,6 +103,7 @@ def scrape_the_earl():
                             
                             try:
                                 event_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+                                # Generate a stable unique ID
                                 event_id = f"earl-{event_date}-{clean_name.lower()[:8]}".replace(" ", "")
                                 
                                 found_events.append({
@@ -105,23 +114,27 @@ def scrape_the_earl():
                                     "ticket_url": item.get('url', url)
                                 })
                             except: continue
-                except: continue
+                except:
+                    continue
             
             browser.close()
         except Exception as e:
             print(f"Earl Scraper error: {str(e)}")
     
+    # Internal deduplication based on ID
     unique_dict = {e['tm_id']: e for e in found_events}
     return list(unique_dict.values())
 
-# --- 4. Sync to DB ---
+# --- 4. Sync to DB with Smart Deduplication ---
 def sync_to_db(combined_list):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     new_count = 0
+    
     try:
+        # 4a. Add New/Unique Shows
         for event_data in combined_list:
-            # FIXED: Corrected the and_() syntax to avoid the ArgumentError
+            # Check for same date AND same venue to prevent duplicates across sources
             existing = db.query(Event).filter(
                 and_(
                     Event.date_time == event_data['date_time'],
@@ -132,15 +145,27 @@ def sync_to_db(combined_list):
             if not existing:
                 db.add(Event(**event_data))
                 new_count += 1
+        
         db.commit()
+        
+        # 4b. Cleanup: Remove past events so the site stays fresh
+        today = datetime.now().date()
+        deleted = db.query(Event).filter(Event.date_time < today).delete()
+        db.commit()
+        if deleted > 0:
+            print(f"Cleanup: Removed {deleted} expired events.")
+
     except Exception as e:
-        print(f"Sync Error: {e}")
+        print(f"Database Sync Error: {e}")
+        db.rollback()
     finally:
         db.close()
+    
     return new_count
 
 if __name__ == "__main__":
-    print("--- 1. Starting Collection ---")
+    print(f"--- 1. Starting Collection ({datetime.now().strftime('%Y-%m-%d %H:%M')}) ---")
+    
     tm_shows = fetch_ticketmaster()
     print(f"Fetched {len(tm_shows)} Ticketmaster events.")
     
