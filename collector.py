@@ -3,7 +3,7 @@ import re
 import json
 import requests
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Date, Text
+from sqlalchemy import create_engine, Column, String, Date, Text, and_
 from sqlalchemy.orm import declarative_base, sessionmaker
 from playwright.sync_api import sync_playwright
 
@@ -19,7 +19,7 @@ class Event(Base):
     ticket_url = Column(Text)
 
 # DATABASE LOGIC
-raw_db_url = os.getenv("DATABASE_URL", "sqlite:///shows.db")
+raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 if "postgres://" in raw_db_url:
     db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 else:
@@ -65,21 +65,13 @@ def scrape_the_earl():
             page = context.new_page()
             url = "https://www.bandsintown.com/v/10001781-the-earl"
             
-            # Use domcontentloaded instead of networkidle to avoid timeout
-            print("Loading page structure...")
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            
-            # Wait for the data scripts specifically
-            print("Waiting for data to hydrate...")
             page.wait_for_timeout(7000) 
             
             scripts = page.locator('script').all()
-            print(f"DEBUG: Analyzing {len(scripts)} scripts...")
-
             for script in scripts:
                 content = script.evaluate("node => node.textContent").strip()
-                if '"startDate"' not in content:
-                    continue
+                if '"startDate"' not in content: continue
                 
                 try:
                     content = re.sub(r'^\s*//<!\[CDATA\[|//\]\]>\s*$', '', content)
@@ -129,10 +121,9 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
-            # SMART CHECK: Look for same date AND same venue (case-insensitive)
-            # This prevents "Pissed Jeans" and "Pissed Jeans (Early Show)" from doubling up
+            # FIXED: Corrected the and_() syntax to avoid the ArgumentError
             existing = db.query(Event).filter(
-                (
+                and_(
                     Event.date_time == event_data['date_time'],
                     Event.venue_name.ilike(event_data['venue_name'])
                 )
@@ -141,10 +132,9 @@ def sync_to_db(combined_list):
             if not existing:
                 db.add(Event(**event_data))
                 new_count += 1
-            else:
-                # Optional: If the new one has a better name, you could update it here
-                pass
         db.commit()
+    except Exception as e:
+        print(f"Sync Error: {e}")
     finally:
         db.close()
     return new_count
