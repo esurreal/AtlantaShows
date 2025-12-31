@@ -2,10 +2,10 @@ import os
 import re
 import json
 import requests
+import time
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Date, Text, and_
+from sqlalchemy import create_engine, Column, String, Date, Text, and_, or_
 from sqlalchemy.orm import declarative_base, sessionmaker
-from playwright.sync_api import sync_playwright
 
 # --- 1. Database Setup ---
 Base = declarative_base()
@@ -24,7 +24,6 @@ if "postgres://" in raw_db_url:
 else:
     db_url = raw_db_url
 
-# Fixed: Removed connect_timeout to prevent the TypeError
 engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -32,12 +31,15 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
-    if not api_key: return events
-    url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=50"
+    if not api_key: 
+        print("TM_API_KEY not found.")
+        return events
+    url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100&sort=date,asc"
     try:
         response = requests.get(url, timeout=15)
         data = response.json()
-        for item in data.get('_embedded', {}).get('events', []):
+        found = data.get('_embedded', {}).get('events', [])
+        for item in found:
             events.append({
                 "tm_id": item['id'],
                 "name": item['name'],
@@ -45,90 +47,53 @@ def fetch_ticketmaster():
                 "venue_name": item['_embedded']['venues'][0]['name'],
                 "ticket_url": item['url']
             })
-    except: pass
+        print(f"Ticketmaster: Found {len(events)} events.")
+    except Exception as e: print(f"TM Error: {e}")
     return events
 
-# --- 3. 529 Scraper ---
-def scrape_529(page):
+# --- 3. Bandsintown Internal API ---
+def fetch_bandsintown_api(session, venue_id, venue_display_name):
     found_events = []
-    print("Scraping 529...")
+    print(f"Fetching {venue_display_name}...")
+    
+    url = f"https://www.bandsintown.com/venue/{venue_id}/upcoming_events?all_events=true"
+    
     try:
-        page.goto("https://529atlanta.com/", wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(4000)
-        # 529 items often live in these classes
-        items = page.locator(".show-info, .event-item, .sqs-events-collection-list .vevent").all()
-        for item in items:
+        # We wait a second between requests to avoid being flagged on Railway
+        time.sleep(1) 
+        response = session.get(url, timeout=15)
+        
+        if response.status_code != 200:
+            print(f"!!! {venue_display_name} Failed (Status: {response.status_code})")
+            return []
+            
+        data = response.json()
+        for item in data:
             try:
-                name = item.locator("h2, h3, .title, .summary").first.inner_text().strip()
-                date_str = item.locator(".show-date, .date, .eventlist-datetimestart").first.inner_text().strip()
-                match = re.search(r'([A-Za-z]+ \d{1,2})', date_str)
-                event_date = datetime.strptime(f"{match.group(1)} {datetime.now().year}", "%b %d %Y").date()
-                link = item.locator("a").first.get_attribute("href")
+                raw_name = item.get('name', '')
+                if not raw_name or raw_name.upper() == venue_display_name.upper():
+                    continue
+
+                clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
+                date_str = item.get('datetime', '').split('T')[0]
+                event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                
                 found_events.append({
-                    "tm_id": f"529-{event_date}-{name.lower()[:5]}".replace(" ", ""),
-                    "name": name, "date_time": event_date, "venue_name": "529",
-                    "ticket_url": link if link.startswith("http") else f"https://529atlanta.com{link}"
+                    "tm_id": f"{venue_display_name[:2].lower()}-{event_date}-{clean_name.lower()[:5]}".replace(" ", ""),
+                    "name": clean_name,
+                    "date_time": event_date,
+                    "venue_name": venue_display_name,
+                    "ticket_url": item.get('url', f"https://www.bandsintown.com/v/{venue_id}")
                 })
             except: continue
-    except Exception as e: print(f"529 error: {e}")
+        print(f"{venue_display_name}: Found {len(found_events)} events.")
+    except Exception as e:
+        print(f"API Error for {venue_display_name}: {e}")
     return found_events
 
-# --- 4. Drunken Unicorn Scraper ---
-def scrape_drunken_unicorn(page):
-    found_events = []
-    print("Scraping Drunken Unicorn...")
-    try:
-        # Increased timeout and changed wait strategy
-        page.goto("https://www.thedrunkenunicornatl.com/events", wait_until="networkidle", timeout=60000)
-        items = page.locator(".eventlist-item").all()
-        for item in items:
-            try:
-                name = item.locator(".eventlist-title").inner_text().strip()
-                date_raw = item.locator("time.eventlist-datetimestart").get_attribute("datetime")
-                event_date = datetime.strptime(date_raw, "%Y-%m-%d").date()
-                link = item.locator("a.eventlist-title-link").first.get_attribute("href")
-                found_events.append({
-                    "tm_id": f"du-{event_date}-{name.lower()[:5]}".replace(" ", ""),
-                    "name": name, "date_time": event_date, "venue_name": "The Drunken Unicorn",
-                    "ticket_url": f"https://www.thedrunkenunicornatl.com{link}" if link.startswith("/") else link
-                })
-            except: continue
-    except Exception as e: print(f"Drunken Unicorn error: {e}")
-    return found_events
-
-# --- 5. Bandsintown Scraper ---
-def scrape_bandsintown_venue(page, venue_id, venue_display_name):
-    found_events = []
-    print(f"Scraping {venue_display_name}...")
-    try:
-        page.goto(f"https://www.bandsintown.com/v/{venue_id}", wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(5000)
-        scripts = page.locator('script').all()
-        for script in scripts:
-            content = script.evaluate("node => node.textContent").strip()
-            if '"startDate"' not in content: continue
-            try:
-                data = json.loads(re.sub(r'^\s*//<!\[CDATA\[|//\]\]>\s*$', '', content))
-                items = data.get('@graph', [data]) if isinstance(data, dict) else data
-                for item in items:
-                    if isinstance(item, dict) and 'startDate' in item:
-                        raw_name = item.get('name', '')
-                        if not raw_name or raw_name.upper() in [venue_display_name.upper(), "BANDSINTOWN"]: continue
-                        clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
-                        date_str = item.get('startDate', '').split('T')[0]
-                        event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                        found_events.append({
-                            "tm_id": f"{venue_display_name[:2].lower()}-{event_date}-{clean_name.lower()[:5]}".replace(" ", ""),
-                            "name": clean_name, "date_time": event_date, "venue_name": venue_display_name,
-                            "ticket_url": item.get('url', f"https://www.bandsintown.com/v/{venue_id}")
-                        })
-            except: continue
-    except Exception as e: print(f"Error {venue_display_name}: {e}")
-    return found_events
-
-# --- 6. Sync to DB ---
+# --- 4. Sync ---
 def sync_to_db(combined_list):
-    print(f"Syncing {len(combined_list)} potential shows to database...")
+    if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     new_count = 0
@@ -141,33 +106,35 @@ def sync_to_db(combined_list):
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
-        today = datetime.now().date()
-        db.query(Event).filter(Event.date_time < today).delete()
+        db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
-    except Exception as e:
-        print(f"Database Error: {e}")
     finally:
         db.close()
     return new_count
 
 if __name__ == "__main__":
+    # Initialize a Session for persistent headers
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.bandsintown.com/"
+    })
+
     all_shows = fetch_ticketmaster()
+    
     bit_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
         {"id": "10007886", "name": "Eyedrum"},
-        {"id": "11466023", "name": "Culture Shock"}
+        {"id": "11466023", "name": "Culture Shock"},
+        {"id": "10001815", "name": "The Drunken Unicorn"},
+        {"id": "10005523", "name": "529"} 
     ]
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        page = context.new_page()
-        for v in bit_venues:
-            all_shows.extend(scrape_bandsintown_venue(page, v['id'], v['name']))
-        all_shows.extend(scrape_529(page))
-        all_shows.extend(scrape_drunken_unicorn(page))
-        print("Closing browser...")
-        browser.close()
+
+    for v in bit_venues:
+        venue_shows = fetch_bandsintown_api(s, v['id'], v['name'])
+        all_shows.extend(venue_shows)
 
     total = sync_to_db(all_shows)
     print(f"--- Finished. Added {total} new shows to Database. ---")
