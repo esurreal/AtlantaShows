@@ -5,21 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ATL Live | Music Finder</title>
     <style>
-        :root { --primary: #6200ee; --bg: #f5f5f5; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        :root { 
+            --primary: #6200ee; 
+            --bg: #121212; 
+            --card-bg: #1e1e1e;
+            --text: #ffffff;
+        }
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            background: var(--bg); 
+            color: var(--text);
+            margin: 0; 
+            padding: 20px; 
+        }
         header { text-align: center; padding: 40px 0; }
+        h1 { margin: 0; font-size: 2.5rem; }
         
-        .container { max-width: 1000px; margin: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .container { 
+            max-width: 1100px; 
+            margin: auto; 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+            gap: 20px; 
+        }
         
-        /* Fixed Background and Text Colors */
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-5px); }
+        .card { 
+            background: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 12px; 
+            border: 1px solid #333;
+            display: flex; 
+            flex-direction: column; 
+            transition: transform 0.2s, border-color 0.2s; 
+        }
+        .card:hover { 
+            transform: translateY(-5px); 
+            border-color: var(--primary);
+        }
         
-        .date { font-weight: bold; color: var(--primary); font-size: 0.9rem; margin-bottom: 8px; }
-        .name { font-size: 1.2rem; margin: 0 0 10px 0; color: #222; flex-grow: 1; }
-        .venue { color: #555; font-size: 0.9rem; margin-bottom: 20px; }
+        .date { font-weight: bold; color: #00ffcc; font-size: 0.9rem; margin-bottom: 8px; }
+        .name { font-size: 1.3rem; margin: 0 0 10px 0; color: #fff; flex-grow: 1; }
+        .venue { color: #bbb; font-size: 0.9rem; margin-bottom: 20px; }
         
-        .btn { background: var(--primary); color: white; text-decoration: none; text-align: center; padding: 10px; border-radius: 6px; font-weight: bold; }
+        .btn { 
+            background: var(--primary); 
+            color: white; 
+            text-decoration: none; 
+            text-align: center; 
+            padding: 12px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -30,7 +68,8 @@
 </header>
 
 <div class="container" id="event-container">
-    </div>
+    <p>Loading the underground...</p>
+</div>
 
 <script>
     async function loadEvents() {
@@ -39,7 +78,7 @@
             const events = await response.json();
             const container = document.getElementById('event-container');
             
-            if (events.length === 0) {
+            if (!events || events.length === 0) {
                 container.innerHTML = "<p>No shows found. Run the collector!</p>";
                 return;
             }
@@ -47,9 +86,9 @@
             container.innerHTML = events.map(event => {
                 let formattedDate = 'Date TBA';
                 
-                if (event.event_date) { // Ensure this matches your API key name
-                    // Split "2025-12-25" into parts to avoid timezone shifting
-                    const [year, month, day] = event.event_date.split('-');
+                // Matches "date_time" from your Python API
+                if (event.date_time) { 
+                    const [year, month, day] = event.date_time.split('-');
                     const dateObj = new Date(year, month - 1, day); 
                     
                     formattedDate = dateObj.toLocaleDateString('en-US', { 
@@ -62,9 +101,9 @@
                 return `
                     <div class="card">
                         <div class="date">${formattedDate}</div>
-                        <h3 class="name">${event.event_title}</h3>
-                        <div class="venue">📍 ${event.event_venue}</div>
-                        <a href="${event.event_image_url}" target="_blank" class="btn">Get Tickets</a>
+                        <h3 class="name">${event.name}</h3>
+                        <div class="venue">📍 ${event.venue_name}</div>
+                        <a href="${event.ticket_url}" target="_blank" class="btn">Get Tickets</a>
                     </div>
                 `;
             }).join('');
