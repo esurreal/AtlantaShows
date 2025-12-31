@@ -47,25 +47,33 @@ def fetch_ticketmaster():
     except: pass
     return events
 
-# --- 3. 529 Scraper ---
+# --- 3. 529 Scraper (Improved) ---
 def scrape_529(page):
     found_events = []
     print("Scraping 529...")
     url = "https://529atlanta.com/"
     try:
-        page.goto(url, wait_until="networkidle", timeout=60000)
-        # Look for the show items on the home page/calendar
-        show_elements = page.locator(".show-info").all() # Based on common 529 structure
+        # Use domcontentloaded to avoid the timeout
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(5000)
+        
+        # 529 usually uses .show-info or .event-details
+        show_elements = page.locator(".show-info, .event-item").all()
         
         for show in show_elements:
             try:
-                name = show.locator("h2, h3").first.inner_text().strip()
-                date_str = show.locator(".show-date").first.inner_text().strip()
-                # 529 dates often look like "Saturday Jan 03, 2026"
-                # We extract the part that looks like a date
-                clean_date_str = re.search(r'[A-Za-z]+\s+\d{1,2},\s+\d{4}', date_str).group(0)
-                event_date = datetime.strptime(clean_date_str, "%b %d, %Y").date()
+                name = show.locator("h2, h3, .title").first.inner_text().strip()
+                date_str = show.locator(".show-date, .date").first.inner_text().strip()
                 
+                # Regex to find "Month Day, Year"
+                match = re.search(r'([A-Za-z]+ \d{1,2}, \d{4})', date_str)
+                if match:
+                    event_date = datetime.strptime(match.group(1), "%b %d, %Y").date()
+                else:
+                    # Fallback for "Jan 03" without year
+                    match = re.search(r'([A-Za-z]+ \d{1,2})', date_str)
+                    event_date = datetime.strptime(f"{match.group(1)} {datetime.now().year}", "%b %d %Y").date()
+
                 link_el = show.locator("a").first
                 link = link_el.get_attribute("href") if link_el else url
                 
@@ -78,36 +86,39 @@ def scrape_529(page):
                 })
             except: continue
     except Exception as e:
-        print(f"529 specific error: {e}")
+        print(f"529 error: {e}")
     return found_events
 
-# --- 4. The Drunken Unicorn (BigTickets Scraper) ---
+# --- 4. Drunken Unicorn (Resilient Scraper) ---
 def scrape_drunken_unicorn(page):
     found_events = []
     print("Scraping Drunken Unicorn...")
     url = "https://www.thedrunkenunicornatl.com/events"
     try:
-        page.goto(url, wait_until="networkidle", timeout=60000)
-        page.wait_for_selector(".eventlist-title", timeout=10000)
-        titles = page.locator(".eventlist-title").all()
-        dates = page.locator("time.eventlist-datetimestart").all()
-        links = page.locator(".eventlist-readmore-link").all()
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_selector(".eventlist-column-info, .eventlist-item", timeout=10000)
+        
+        items = page.locator(".eventlist-item, .eventlist-column-info").all()
 
-        for i in range(len(titles)):
-            name = titles[i].inner_text().strip()
-            raw_date = dates[i].get_attribute("datetime")
-            event_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-            event_url = links[i].get_attribute("href")
-            
-            found_events.append({
-                "tm_id": f"du-{event_date}-{name.lower()[:5]}".replace(" ", ""),
-                "name": name,
-                "date_time": event_date,
-                "venue_name": "The Drunken Unicorn",
-                "ticket_url": f"https://www.thedrunkenunicornatl.com{event_url}" if event_url.startswith("/") else event_url
-            })
+        for item in items:
+            try:
+                name = item.locator(".eventlist-title").inner_text().strip()
+                date_raw = item.locator("time.eventlist-datetimestart").get_attribute("datetime")
+                event_date = datetime.strptime(date_raw, "%Y-%m-%d").date()
+                
+                link_el = item.locator(".eventlist-readmore-link, a").first
+                event_url = link_el.get_attribute("href") if link_el else ""
+                
+                found_events.append({
+                    "tm_id": f"du-{event_date}-{name.lower()[:5]}".replace(" ", ""),
+                    "name": name,
+                    "date_time": event_date,
+                    "venue_name": "The Drunken Unicorn",
+                    "ticket_url": f"https://www.thedrunkenunicornatl.com{event_url}" if event_url.startswith("/") else event_url
+                })
+            except: continue
     except Exception as e:
-        print(f"Drunken Unicorn specific error: {e}")
+        print(f"Drunken Unicorn error: {e}")
     return found_events
 
 # --- 5. Modular Bandsintown Scraper ---
@@ -174,31 +185,20 @@ def sync_to_db(combined_list):
 
 if __name__ == "__main__":
     all_shows = fetch_ticketmaster()
-    
-    # Venues using the Bandsintown method
     bit_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
         {"id": "10007886", "name": "Eyedrum"},
         {"id": "11466023", "name": "Culture Shock"}
     ]
-
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
         page = context.new_page()
-        
-        # 1. Scrape Bandsintown venues
         for v in bit_venues:
             all_shows.extend(scrape_bandsintown_venue(page, v['id'], v['name']))
-        
-        # 2. Scrape 529
         all_shows.extend(scrape_529(page))
-        
-        # 3. Scrape Drunken Unicorn
         all_shows.extend(scrape_drunken_unicorn(page))
-        
         browser.close()
-
     total = sync_to_db(all_shows)
     print(f"--- Finished. Total new shows added: {total} ---")
