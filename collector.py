@@ -132,7 +132,7 @@ def sync_to_db(combined_list):
             # SMART CHECK: Look for same date AND same venue (case-insensitive)
             # This prevents "Pissed Jeans" and "Pissed Jeans (Early Show)" from doubling up
             existing = db.query(Event).filter(
-                and_(
+                (
                     Event.date_time == event_data['date_time'],
                     Event.venue_name.ilike(event_data['venue_name'])
                 )
