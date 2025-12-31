@@ -18,8 +18,6 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
-# DATABASE LOGIC
-# Priority: Public URL (for local runs) -> Internal URL (for Railway Cron) -> Local SQLite
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 if "postgres://" in raw_db_url:
     db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
@@ -33,9 +31,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
-    if not api_key:
-        print("Warning: TM_API_KEY not found in environment variables.")
-        return events
+    if not api_key: return events
 
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=50"
     try:
@@ -49,92 +45,68 @@ def fetch_ticketmaster():
                 "venue_name": item['_embedded']['venues'][0]['name'],
                 "ticket_url": item['url']
             })
-    except Exception as e:
-        print(f"Ticketmaster error: {e}")
+    except: pass
     return events
 
-# --- 3. The Earl Scraper (Stealth & Brute Force) ---
-def scrape_the_earl():
+# --- 3. Modular Bandsintown Scraper ---
+def scrape_bandsintown_venue(page, venue_id, venue_display_name):
     found_events = []
-    print("Scraping The Earl via Bandsintown...")
-    with sync_playwright() as p:
-        try:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
-            page = context.new_page()
-            url = "https://www.bandsintown.com/v/10001781-the-earl"
-            
-            # Fast-load strategy: wait for HTML, then let JS breathe
-            page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_timeout(7000) 
-            
-            scripts = page.locator('script').all()
-            print(f"DEBUG: Analyzing {len(scripts)} scripts for Earl data...")
-
-            for script in scripts:
-                content = script.evaluate("node => node.textContent").strip()
-                if '"startDate"' not in content:
-                    continue
-                
-                try:
-                    # Strip CDATA tags if present
-                    content = re.sub(r'^\s*//<!\[CDATA\[|//\]\]>\s*$', '', content)
-                    data = json.loads(content)
-                    
-                    # Flatten JSON structure to find event items
-                    to_check = []
-                    if isinstance(data, dict):
-                        if "@graph" in data: to_check.extend(data["@graph"])
-                        else: to_check.append(data)
-                    elif isinstance(data, list):
-                        to_check.extend(data)
-
-                    for item in to_check:
-                        if isinstance(item, dict) and 'name' in item and 'startDate' in item:
-                            raw_name = item.get('name', '')
-                            # Ignore entries that are just the venue name
-                            if not raw_name or raw_name.upper() == "THE EARL":
-                                continue
-                                
-                            clean_name = re.sub(r'(\s*@\s*The\s*EARL.*|\s+at\s+The\s+EARL.*)', '', raw_name, flags=re.I).strip()
-                            start_str = item.get('startDate', '').split('T')[0]
-                            
-                            try:
-                                event_date = datetime.strptime(start_str, "%Y-%m-%d").date()
-                                # Generate a stable unique ID
-                                event_id = f"earl-{event_date}-{clean_name.lower()[:8]}".replace(" ", "")
-                                
-                                found_events.append({
-                                    "tm_id": event_id,
-                                    "name": clean_name,
-                                    "date_time": event_date,
-                                    "venue_name": "The Earl",
-                                    "ticket_url": item.get('url', url)
-                                })
-                            except: continue
-                except:
-                    continue
-            
-            browser.close()
-        except Exception as e:
-            print(f"Earl Scraper error: {str(e)}")
+    url = f"https://www.bandsintown.com/v/{venue_id}"
+    print(f"Scraping {venue_display_name}...")
     
-    # Internal deduplication based on ID
-    unique_dict = {e['tm_id']: e for e in found_events}
-    return list(unique_dict.values())
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(5000) # Give JS time to load the calendar
+        
+        scripts = page.locator('script').all()
+        for script in scripts:
+            content = script.evaluate("node => node.textContent").strip()
+            if '"startDate"' not in content: continue
+            
+            try:
+                content = re.sub(r'^\s*//<!\[CDATA\[|//\]\]>\s*$', '', content)
+                data = json.loads(content)
+                
+                to_check = []
+                if isinstance(data, dict):
+                    if "@graph" in data: to_check.extend(data["@graph"])
+                    else: to_check.append(data)
+                elif isinstance(data, list):
+                    to_check.extend(data)
 
-# --- 4. Sync to DB with Smart Deduplication ---
+                for item in to_check:
+                    if isinstance(item, dict) and 'name' in item and 'startDate' in item:
+                        raw_name = item.get('name', '')
+                        if not raw_name or raw_name.upper() in [venue_display_name.upper(), "BANDSINTOWN"]:
+                            continue
+                            
+                        # Clean the name (remove venue suffixes)
+                        clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
+                        start_str = item.get('startDate', '').split('T')[0]
+                        
+                        event_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+                        event_id = f"{venue_display_name[:3].lower()}-{event_date}-{clean_name.lower()[:8]}".replace(" ", "")
+                        
+                        found_events.append({
+                            "tm_id": event_id,
+                            "name": clean_name,
+                            "date_time": event_date,
+                            "venue_name": venue_display_name,
+                            "ticket_url": item.get('url', url)
+                        })
+            except: continue
+    except Exception as e:
+        print(f"Error scraping {venue_display_name}: {e}")
+    
+    return found_events
+
+# --- 4. Sync & Cleanup ---
 def sync_to_db(combined_list):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     new_count = 0
-    
     try:
-        # 4a. Add New/Unique Shows
         for event_data in combined_list:
-            # Check for same date AND same venue to prevent duplicates across sources
             existing = db.query(Event).filter(
                 and_(
                     Event.date_time == event_data['date_time'],
@@ -145,32 +117,39 @@ def sync_to_db(combined_list):
             if not existing:
                 db.add(Event(**event_data))
                 new_count += 1
-        
         db.commit()
         
-        # 4b. Cleanup: Remove past events so the site stays fresh
+        # Cleanup past shows
         today = datetime.now().date()
-        deleted = db.query(Event).filter(Event.date_time < today).delete()
+        db.query(Event).filter(Event.date_time < today).delete()
         db.commit()
-        if deleted > 0:
-            print(f"Cleanup: Removed {deleted} expired events.")
-
-    except Exception as e:
-        print(f"Database Sync Error: {e}")
-        db.rollback()
     finally:
         db.close()
-    
     return new_count
 
+# --- Main Execution ---
 if __name__ == "__main__":
-    print(f"--- 1. Starting Collection ({datetime.now().strftime('%Y-%m-%d %H:%M')}) ---")
-    
-    tm_shows = fetch_ticketmaster()
-    print(f"Fetched {len(tm_shows)} Ticketmaster events.")
-    
-    earl_shows = scrape_the_earl()
-    print(f"Scraped {len(earl_shows)} shows from The Earl.")
-    
-    total_added = sync_to_db(tm_shows + earl_shows)
-    print(f"--- Finished. Added {total_added} new shows to Database. ---")
+    all_shows = fetch_ticketmaster()
+    print(f"Fetched {len(all_shows)} Ticketmaster events.")
+
+    venues = [
+        {"id": "10001781", "name": "The Earl"},
+        {"id": "10243412", "name": "Boggs Social"},
+        {"id": "10001815", "name": "Drunken Unicorn"},
+        {"id": "10007886", "name": "Eyedrum"},
+        {"id": "11466023", "name": "Culture Shock"}
+    ]
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        page = context.new_page()
+        
+        for v in venues:
+            venue_shows = scrape_bandsintown_venue(page, v['id'], v['name'])
+            all_shows.extend(venue_shows)
+        
+        browser.close()
+
+    total = sync_to_db(all_shows)
+    print(f"--- Finished. Total new shows added: {total} ---")
