@@ -129,10 +129,21 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
-            existing = db.query(Event).filter(Event.tm_id == event_data['tm_id']).first()
+            # SMART CHECK: Look for same date AND same venue (case-insensitive)
+            # This prevents "Pissed Jeans" and "Pissed Jeans (Early Show)" from doubling up
+            existing = db.query(Event).filter(
+                and_(
+                    Event.date_time == event_data['date_time'],
+                    Event.venue_name.ilike(event_data['venue_name'])
+                )
+            ).first()
+
             if not existing:
                 db.add(Event(**event_data))
                 new_count += 1
+            else:
+                # Optional: If the new one has a better name, you could update it here
+                pass
         db.commit()
     finally:
         db.close()
