@@ -4,7 +4,7 @@ import json
 import requests
 import time
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Date, Text, and_, or_
+from sqlalchemy import create_engine, Column, String, Date, Text, and_
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # --- 1. Database Setup ---
@@ -31,9 +31,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
-    if not api_key: 
-        print("TM_API_KEY not found.")
-        return events
+    if not api_key: return events
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100&sort=date,asc"
     try:
         response = requests.get(url, timeout=15)
@@ -51,20 +49,21 @@ def fetch_ticketmaster():
     except Exception as e: print(f"TM Error: {e}")
     return events
 
-# --- 3. Bandsintown Internal API ---
+# --- 3. Bandsintown API ---
 def fetch_bandsintown_api(session, venue_id, venue_display_name):
     found_events = []
     print(f"Fetching {venue_display_name}...")
     
+    # We hit the public API endpoint that populates their own website
     url = f"https://www.bandsintown.com/venue/{venue_id}/upcoming_events?all_events=true"
     
     try:
-        # We wait a second between requests to avoid being flagged on Railway
-        time.sleep(1) 
-        response = session.get(url, timeout=15)
+        # Important: Wait a moment so we don't look like a rapid-fire bot
+        time.sleep(2) 
+        response = session.get(url, timeout=20)
         
         if response.status_code != 200:
-            print(f"!!! {venue_display_name} Failed (Status: {response.status_code})")
+            print(f"!!! {venue_display_name} Blocked (Status: {response.status_code})")
             return []
             
         data = response.json()
@@ -91,7 +90,7 @@ def fetch_bandsintown_api(session, venue_id, venue_display_name):
         print(f"API Error for {venue_display_name}: {e}")
     return found_events
 
-# --- 4. Sync ---
+# --- 4. Database Sync ---
 def sync_to_db(combined_list):
     if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
@@ -99,6 +98,7 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
+            # Check if this exact show on this exact day exists
             existing = db.query(Event).filter(
                 and_(Event.date_time == event_data['date_time'], Event.venue_name.ilike(event_data['venue_name']))
             ).first()
@@ -106,6 +106,7 @@ def sync_to_db(combined_list):
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
+        # Clean up old shows
         db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
     finally:
@@ -113,16 +114,17 @@ def sync_to_db(combined_list):
     return new_count
 
 if __name__ == "__main__":
-    # Initialize a Session for persistent headers
+    # Setup a "Real Browser" session
     s = requests.Session()
     s.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json",
-        "Referer": "https://www.bandsintown.com/"
+        "Referer": "https://www.bandsintown.com/v/10001781"
     })
 
     all_shows = fetch_ticketmaster()
     
+    # Official IDs
     bit_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
