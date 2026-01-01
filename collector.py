@@ -1,9 +1,10 @@
 import os
 import re
 import json
-import requests
 import time
+import requests
 from datetime import datetime
+from playwright.sync_api import sync_playwright
 from sqlalchemy import create_engine, Column, String, Date, Text, and_
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -18,26 +19,21 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
+# Get the DB URL from Railway
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
-if "postgres://" in raw_db_url:
-    db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
-else:
-    db_url = raw_db_url
+db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" in raw_db_url else raw_db_url
 
 engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# --- 2. GOOGLE PROXY CONFIGURATION ---
-# IMPORTANT: Re-deploy your Google script and paste the NEW URL here
-GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbwZHVIZj9xf8A2jjoPPl7G_BakZGKVD4OEeSQjfBGCokocuyy_SD7DZHRgNn-Ge0U_3wA/exec"
-
-# --- 3. Ticketmaster Scraper ---
+# --- 2. Ticketmaster Scraper ---
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
     if not api_key: 
         print("[-] Ticketmaster: No TM_API_KEY found.")
         return events
+    
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100&sort=date,asc"
     try:
         response = requests.get(url, timeout=15)
@@ -56,72 +52,64 @@ def fetch_ticketmaster():
         print(f"[!] Ticketmaster Error: {e}")
     return events
 
-# --- 4. The Proxy Scraper ---
-def fetch_via_proxy(venue_id, venue_display_name):
-    if "YOUR_NEW" in GOOGLE_PROXY_URL or not GOOGLE_PROXY_URL:
-        print(f"[-] Skipping {venue_display_name}: Proxy URL not configured.")
-        return []
+# --- 3. Bandsintown Playwright Scraper (The "Indie" Logic) ---
+def fetch_bandsintown_venue(venue_id, venue_display_name):
+    venue_events = []
+    print(f"[*] Scraping {venue_display_name} via Playwright...")
     
-    found_events = []
-    print(f"[*] Fetching {venue_display_name} via Proxy...")
-    try:
-        response = requests.get(f"{GOOGLE_PROXY_URL}?venueId={venue_id}", timeout=30)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        # Using a modern User Agent to avoid simple bot detection
+        context = browser.new_context(
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+        )
+        page = context.new_page()
         
-        # Check if we got the Cloudflare Block again
-        if "Attention Required! | Cloudflare" in response.text:
-            print(f"[!] Cloudflare is still blocking the Google Proxy for {venue_display_name}.")
-            return []
-
-        data = response.json()
+        # Bandsintown URL pattern
+        url = f"https://www.bandsintown.com/v/{venue_id}"
         
-        if isinstance(data, dict) and "error" in data:
-            print(f"[!] Google Script logic error: {data['error']}")
-            return []
-
-        for item in data:
-            try:
-                # The REST API uses 'title' or artist names instead of 'name'
-                raw_name = item.get('title', '')
-                if not raw_name:
-                    # Fallback for BIT REST API format
-                    artists = item.get('lineup', [])
-                    raw_name = ", ".join(artists) if artists else "Unknown Show"
-
-                # Filter out generic venue name entries
-                if venue_display_name.upper() in raw_name.upper() and len(raw_name) < 20:
-                    continue
-
-                clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
-                date_str = item.get('datetime', '').split('T')[0]
-                event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        try:
+            page.goto(url, wait_until="networkidle", timeout=60000)
+            
+            # Extract JSON-LD (Metadata) that Bandsintown puts on every venue page
+            scripts = page.locator('script[type="application/ld+json"]').all()
+            for script in scripts:
+                content = script.evaluate("node => node.textContent").strip()
+                if not content: continue
                 
-                unique_id = f"prx-{venue_id}-{date_str}-{clean_name[:10]}".lower()
-                unique_id = re.sub(r'[^a-z0-9-]', '', unique_id)
+                data = json.loads(content)
+                potential_items = []
+                if isinstance(data, list): potential_items = data
+                elif isinstance(data, dict): potential_items = data.get('@graph', [data])
 
-                # Find the ticket URL (offers list)
-                ticket_url = f"https://www.bandsintown.com/v/{venue_id}"
-                offers = item.get('offers', [])
-                for offer in offers:
-                    if offer.get('type') == 'Tickets':
-                        ticket_url = offer.get('url')
-                        break
+                for item in potential_items:
+                    if isinstance(item, dict) and 'startDate' in item:
+                        raw_name = item.get('name', '')
+                        start_date_str = item.get('startDate', '').split('T')[0]
+                        event_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                        
+                        # Cleanup Name
+                        clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
+                        
+                        # Skip if the name is just the venue itself
+                        if venue_display_name.lower() in clean_name.lower() and len(clean_name) < 20:
+                            continue
 
-                found_events.append({
-                    "tm_id": unique_id,
-                    "name": clean_name,
-                    "date_time": event_date,
-                    "venue_name": venue_display_name,
-                    "ticket_url": ticket_url
-                })
-            except Exception as e: 
-                continue
-                
-        print(f"[+] {venue_display_name}: Found {len(found_events)} events.")
-    except Exception as e:
-        print(f"[!] Proxy Request Failed: {e}")
-    return found_events
+                        venue_events.append({
+                            "tm_id": f"bit-{venue_id}-{start_date_str}-{clean_name[:5].lower()}",
+                            "name": clean_name,
+                            "date_time": event_date,
+                            "venue_name": venue_display_name,
+                            "ticket_url": item.get('url', url)
+                        })
+            print(f"[+] {venue_display_name}: Found {len(venue_events)} events.")
+        except Exception as e:
+            print(f"[!] {venue_display_name} Error: {e}")
+        finally:
+            browser.close()
+    return venue_events
 
-# --- 5. Sync ---
+# --- 4. Sync & Run ---
 def sync_to_db(combined_list):
     if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
@@ -129,29 +117,29 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
+            # Check for existing show on same day at same venue
             existing = db.query(Event).filter(
-                and_(
-                    Event.date_time == event_data['date_time'],
-                    Event.venue_name == event_data['venue_name']
-                )
+                and_(Event.date_time == event_data['date_time'], 
+                     Event.venue_name == event_data['venue_name'])
             ).first()
             if not existing:
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
+        # Delete old shows
         db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
-    except Exception as e:
-        print(f"[!] DB Error: {e}")
-        db.rollback()
     finally:
         db.close()
     return new_count
 
 if __name__ == "__main__":
     print("--- Collection Started ---")
+    
+    # 1. Get Big Shows
     all_shows = fetch_ticketmaster()
     
+    # 2. Get Indie Shows
     small_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
@@ -160,7 +148,9 @@ if __name__ == "__main__":
     ]
 
     for v in small_venues:
-        all_shows.extend(fetch_via_proxy(v['id'], v['name']))
+        all_shows.extend(fetch_bandsintown_venue(v['id'], v['name']))
+        time.sleep(2) # Be polite
 
+    # 3. Save to DB
     total = sync_to_db(all_shows)
-    print(f"--- Finished. Added {total} new shows. ---")
+    print(f"--- Finished. Added {total} new shows to your Atlanta list. ---")
