@@ -29,7 +29,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # --- 2. GOOGLE PROXY CONFIGURATION ---
 # IMPORTANT: Re-deploy your Google script and paste the NEW URL here
-GOOGLE_PROXY_URL = "YOUR_NEW_GOOGLE_URL_HERE"
+GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbwZHVIZj9xf8A2jjoPPl7G_BakZGKVD4OEeSQjfBGCokocuyy_SD7DZHRgNn-Ge0U_3wA/exec"
 
 # --- 3. Ticketmaster Scraper ---
 def fetch_ticketmaster():
