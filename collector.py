@@ -28,14 +28,16 @@ engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # --- 2. GOOGLE PROXY CONFIGURATION ---
-# Paste the URL you copied from Google Apps Script here
-GOOGLE_PROXY_URL = "Yhttps://script.google.com/macros/s/AKfycbyYLF5BFIykPXWfZOqqWKWFCoNrrPAcKfEpxECorc4rFerI-x_SJws1h5SuRyVgtK2wmA/exec"
+# PASTE YOUR NEW GOOGLE URL HERE
+GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbwqYKmX_vvGQrVB2PVJs2Y9pb5EOedBGZWEaM1u98TkLdrS0q31PJesohBArDq5oaqXPw/exec"
 
 # --- 3. Ticketmaster Scraper ---
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
-    if not api_key: return events
+    if not api_key: 
+        print("[-] Ticketmaster: No API key.")
+        return events
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100&sort=date,asc"
     try:
         response = requests.get(url, timeout=15)
@@ -43,57 +45,62 @@ def fetch_ticketmaster():
         found = data.get('_embedded', {}).get('events', [])
         for item in found:
             events.append({
-                "tm_id": item['id'],
+                "tm_id": str(item['id']),
                 "name": item['name'],
                 "date_time": datetime.strptime(item['dates']['start']['localDate'], '%Y-%m-%d').date(),
                 "venue_name": item['_embedded']['venues'][0]['name'],
                 "ticket_url": item['url']
             })
-        print(f"Ticketmaster: Found {len(events)} events.")
-    except: pass
+        print(f"[+] Ticketmaster: Found {len(events)} events.")
+    except Exception as e:
+        print(f"[!] Ticketmaster Error: {e}")
     return events
 
-# --- 4. The Proxy-Based Scraper (For Small Venues) ---
+# --- 4. The Proxy Scraper ---
 def fetch_via_proxy(venue_id, venue_display_name):
-    if "YOUR_DEPLOYED_WEB_APP_URL" in GOOGLE_PROXY_URL:
-        print(f"!!! Skipping {venue_display_name}: GOOGLE_PROXY_URL not set.")
+    if "YOUR_NEW_URL" in GOOGLE_PROXY_URL:
+        print(f"[-] Skipping {venue_display_name}: Proxy URL not set.")
         return []
     
     found_events = []
-    print(f"Fetching {venue_display_name} via Google Proxy...")
-    
+    print(f"[*] Fetching {venue_display_name} via Proxy...")
     try:
-        # We call our Google Script, passing the venueId as a parameter
-        proxy_request_url = f"{GOOGLE_PROXY_URL}?venueId={venue_id}"
-        response = requests.get(proxy_request_url, timeout=30)
+        # Note: We must use the exact URL from Google
+        response = requests.get(f"{GOOGLE_PROXY_URL}?venueId={venue_id}", timeout=30)
         
         if response.status_code != 200:
-            print(f"!!! Proxy error for {venue_display_name} (Status {response.status_code})")
+            print(f"[!] Proxy returned error {response.status_code}")
             return []
             
         data = response.json()
+        if isinstance(data, dict) and "error" in data:
+            print(f"[!] Google Script Error: {data['error']}")
+            return []
+
         for item in data:
             try:
                 raw_name = item.get('name', '')
-                # Filter out generic venue names
-                if not raw_name or venue_display_name.upper() in raw_name.upper() and len(raw_name) < 20:
+                if not raw_name or (venue_display_name.upper() in raw_name.upper() and len(raw_name) < 20):
                     continue
 
                 clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
                 date_str = item.get('datetime', '').split('T')[0]
                 event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 
+                unique_id = f"prx-{venue_id}-{date_str}-{clean_name[:10]}".lower()
+                unique_id = re.sub(r'[^a-z0-9-]', '', unique_id)
+
                 found_events.append({
-                    "tm_id": f"prx-{venue_id}-{event_date}-{clean_name[:5]}".lower().replace(" ", ""),
+                    "tm_id": unique_id,
                     "name": clean_name,
                     "date_time": event_date,
                     "venue_name": venue_display_name,
                     "ticket_url": item.get('url', f"https://www.bandsintown.com/v/{venue_id}")
                 })
             except: continue
-        print(f"{venue_display_name}: Found {len(found_events)} events via Proxy.")
+        print(f"[+] {venue_display_name}: Found {len(found_events)} events.")
     except Exception as e:
-        print(f"Error fetching {venue_display_name} via proxy: {e}")
+        print(f"[!] Proxy Request Failed: {e}")
     return found_events
 
 # --- 5. Sync ---
@@ -104,8 +111,13 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
+            # Check for Date + Venue + Name overlap
             existing = db.query(Event).filter(
-                and_(Event.date_time == event_data['date_time'], Event.name == event_data['name'])
+                and_(
+                    Event.date_time == event_data['date_time'],
+                    Event.venue_name == event_data['venue_name'],
+                    Event.name == event_data['name']
+                )
             ).first()
             if not existing:
                 db.add(Event(**event_data))
@@ -113,27 +125,25 @@ def sync_to_db(combined_list):
         db.commit()
         db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
+    except Exception as e:
+        print(f"[!] DB Error: {e}")
     finally:
         db.close()
     return new_count
 
 if __name__ == "__main__":
-    # 1. Fetch from Ticketmaster (Direct)
+    print("--- Collection Started ---")
     all_shows = fetch_ticketmaster()
     
-    # 2. Venues that require the Google Proxy
     small_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
-        {"id": "10007886", "name": "Eyedrum"},
         {"id": "10005523", "name": "529"},
         {"id": "10001815", "name": "The Drunken Unicorn"}
     ]
 
-    # 3. Fetch from Small Venues (via Proxy)
     for v in small_venues:
         all_shows.extend(fetch_via_proxy(v['id'], v['name']))
 
-    # 4. Save to Postgres
     total = sync_to_db(all_shows)
-    print(f"--- Finished. Added {total} new shows to Database. ---")
+    print(f"--- Finished. Added {total} new shows. ---")
