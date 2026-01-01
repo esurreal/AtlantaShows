@@ -19,7 +19,6 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
-# Get the DB URL from Railway
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" in raw_db_url else raw_db_url
 
@@ -52,26 +51,27 @@ def fetch_ticketmaster():
         print(f"[!] Ticketmaster Error: {e}")
     return events
 
-# --- 3. Bandsintown Playwright Scraper (The "Indie" Logic) ---
+# --- 3. Bandsintown Playwright Scraper ---
 def fetch_bandsintown_venue(venue_id, venue_display_name):
     venue_events = []
     print(f"[*] Scraping {venue_display_name} via Playwright...")
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        # Using a modern User Agent to avoid simple bot detection
-        context = browser.new_context(
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-        )
-        page = context.new_page()
-        
-        # Bandsintown URL pattern
-        url = f"https://www.bandsintown.com/v/{venue_id}"
-        
         try:
+            # Added a slight tweak to the launch to be more cloud-friendly
+            browser = p.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+            
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+            )
+            page = context.new_page()
+            
+            url = f"https://www.bandsintown.com/v/{venue_id}"
             page.goto(url, wait_until="networkidle", timeout=60000)
             
-            # Extract JSON-LD (Metadata) that Bandsintown puts on every venue page
             scripts = page.locator('script[type="application/ld+json"]').all()
             for script in scripts:
                 content = script.evaluate("node => node.textContent").strip()
@@ -88,10 +88,8 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
                         start_date_str = item.get('startDate', '').split('T')[0]
                         event_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
                         
-                        # Cleanup Name
                         clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
                         
-                        # Skip if the name is just the venue itself
                         if venue_display_name.lower() in clean_name.lower() and len(clean_name) < 20:
                             continue
 
@@ -103,10 +101,9 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
                             "ticket_url": item.get('url', url)
                         })
             print(f"[+] {venue_display_name}: Found {len(venue_events)} events.")
+            browser.close()
         except Exception as e:
             print(f"[!] {venue_display_name} Error: {e}")
-        finally:
-            browser.close()
     return venue_events
 
 # --- 4. Sync & Run ---
@@ -117,7 +114,6 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
-            # Check for existing show on same day at same venue
             existing = db.query(Event).filter(
                 and_(Event.date_time == event_data['date_time'], 
                      Event.venue_name == event_data['venue_name'])
@@ -126,7 +122,6 @@ def sync_to_db(combined_list):
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
-        # Delete old shows
         db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
     finally:
@@ -135,11 +130,8 @@ def sync_to_db(combined_list):
 
 if __name__ == "__main__":
     print("--- Collection Started ---")
-    
-    # 1. Get Big Shows
     all_shows = fetch_ticketmaster()
     
-    # 2. Get Indie Shows
     small_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
@@ -149,8 +141,7 @@ if __name__ == "__main__":
 
     for v in small_venues:
         all_shows.extend(fetch_bandsintown_venue(v['id'], v['name']))
-        time.sleep(2) # Be polite
+        time.sleep(2)
 
-    # 3. Save to DB
     total = sync_to_db(all_shows)
-    print(f"--- Finished. Added {total} new shows to your Atlanta list. ---")
+    print(f"--- Finished. Added {total} new shows. ---")
