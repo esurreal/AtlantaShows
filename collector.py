@@ -27,7 +27,11 @@ else:
 engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# --- 2. Ticketmaster Scraper ---
+# --- 2. GOOGLE PROXY CONFIGURATION ---
+# Paste the URL you copied from Google Apps Script here
+GOOGLE_PROXY_URL = "Yhttps://script.google.com/macros/s/AKfycbyYLF5BFIykPXWfZOqqWKWFCoNrrPAcKfEpxECorc4rFerI-x_SJws1h5SuRyVgtK2wmA/exec"
+
+# --- 3. Ticketmaster Scraper ---
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
@@ -49,32 +53,29 @@ def fetch_ticketmaster():
     except: pass
     return events
 
-# --- 3. The Earl / Small Venue Scraper (Widget Version) ---
-def fetch_earl_and_friends(venue_id, venue_display_name):
+# --- 4. The Proxy-Based Scraper (For Small Venues) ---
+def fetch_via_proxy(venue_id, venue_display_name):
+    if "YOUR_DEPLOYED_WEB_APP_URL" in GOOGLE_PROXY_URL:
+        print(f"!!! Skipping {venue_display_name}: GOOGLE_PROXY_URL not set.")
+        return []
+    
     found_events = []
-    print(f"Attempting to recover {venue_display_name}...")
-    
-    # This is the "Widget" endpoint - often more permissive than the main site
-    url = f"https://www.bandsintown.com/venue/{venue_id}/upcoming_events?all_events=true&app_id=js_badearl.com"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Referer": "https://badearl.com/"  # Mimic coming from The Earl's actual website
-    }
+    print(f"Fetching {venue_display_name} via Google Proxy...")
     
     try:
-        time.sleep(2) # Don't rush
-        response = requests.get(url, headers=headers, timeout=15)
+        # We call our Google Script, passing the venueId as a parameter
+        proxy_request_url = f"{GOOGLE_PROXY_URL}?venueId={venue_id}"
+        response = requests.get(proxy_request_url, timeout=30)
         
         if response.status_code != 200:
-            print(f"!!! {venue_display_name} still blocked (Status {response.status_code})")
+            print(f"!!! Proxy error for {venue_display_name} (Status {response.status_code})")
             return []
             
         data = response.json()
         for item in data:
             try:
                 raw_name = item.get('name', '')
+                # Filter out generic venue names
                 if not raw_name or venue_display_name.upper() in raw_name.upper() and len(raw_name) < 20:
                     continue
 
@@ -83,19 +84,19 @@ def fetch_earl_and_friends(venue_id, venue_display_name):
                 event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 
                 found_events.append({
-                    "tm_id": f"{venue_id}-{event_date}-{clean_name[:5]}".lower().replace(" ", ""),
+                    "tm_id": f"prx-{venue_id}-{event_date}-{clean_name[:5]}".lower().replace(" ", ""),
                     "name": clean_name,
                     "date_time": event_date,
                     "venue_name": venue_display_name,
                     "ticket_url": item.get('url', f"https://www.bandsintown.com/v/{venue_id}")
                 })
             except: continue
-        print(f"{venue_display_name}: Found {len(found_events)} events.")
+        print(f"{venue_display_name}: Found {len(found_events)} events via Proxy.")
     except Exception as e:
-        print(f"Error fetching {venue_display_name}: {e}")
+        print(f"Error fetching {venue_display_name} via proxy: {e}")
     return found_events
 
-# --- 4. Sync ---
+# --- 5. Sync ---
 def sync_to_db(combined_list):
     if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
@@ -104,7 +105,7 @@ def sync_to_db(combined_list):
     try:
         for event_data in combined_list:
             existing = db.query(Event).filter(
-                and_(Event.date_time == event_data['date_time'], Event.venue_name == event_data['venue_name'])
+                and_(Event.date_time == event_data['date_time'], Event.name == event_data['name'])
             ).first()
             if not existing:
                 db.add(Event(**event_data))
@@ -117,8 +118,10 @@ def sync_to_db(combined_list):
     return new_count
 
 if __name__ == "__main__":
+    # 1. Fetch from Ticketmaster (Direct)
     all_shows = fetch_ticketmaster()
     
+    # 2. Venues that require the Google Proxy
     small_venues = [
         {"id": "10001781", "name": "The Earl"},
         {"id": "10243412", "name": "Boggs Social"},
@@ -127,8 +130,10 @@ if __name__ == "__main__":
         {"id": "10001815", "name": "The Drunken Unicorn"}
     ]
 
+    # 3. Fetch from Small Venues (via Proxy)
     for v in small_venues:
-        all_shows.extend(fetch_earl_and_friends(v['id'], v['name']))
+        all_shows.extend(fetch_via_proxy(v['id'], v['name']))
 
+    # 4. Save to Postgres
     total = sync_to_db(all_shows)
     print(f"--- Finished. Added {total} new shows to Database. ---")
