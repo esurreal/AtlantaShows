@@ -28,15 +28,15 @@ engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # --- 2. GOOGLE PROXY CONFIGURATION ---
-# IMPORTANT: PASTE YOUR NEW DEPLOYMENT URL HERE
-GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbwTZFtCNowmREf3JH8tdiclejYi0m5wkORlfG8syXvqM8ZSsM3RL8ehLpgyGfizrMPbuw/exec"
+# IMPORTANT: Re-deploy your Google script and paste the NEW URL here
+GOOGLE_PROXY_URL = "YOUR_NEW_GOOGLE_URL_HERE"
 
 # --- 3. Ticketmaster Scraper ---
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
     if not api_key: 
-        print("[-] Ticketmaster: No TM_API_KEY found in Railway variables.")
+        print("[-] Ticketmaster: No TM_API_KEY found.")
         return events
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100&sort=date,asc"
     try:
@@ -58,7 +58,7 @@ def fetch_ticketmaster():
 
 # --- 4. The Proxy Scraper ---
 def fetch_via_proxy(venue_id, venue_display_name):
-    if "YOUR_NEW_DEPLOYED" in GOOGLE_PROXY_URL or not GOOGLE_PROXY_URL:
+    if "YOUR_NEW" in GOOGLE_PROXY_URL or not GOOGLE_PROXY_URL:
         print(f"[-] Skipping {venue_display_name}: Proxy URL not configured.")
         return []
     
@@ -67,21 +67,28 @@ def fetch_via_proxy(venue_id, venue_display_name):
     try:
         response = requests.get(f"{GOOGLE_PROXY_URL}?venueId={venue_id}", timeout=30)
         
-        # Check if the response is actually JSON
-        try:
-            data = response.json()
-        except Exception:
-            print(f"[!] Proxy for {venue_display_name} returned HTML/Text instead of JSON. Check Google Script permissions.")
+        # Check if we got the Cloudflare Block again
+        if "Attention Required! | Cloudflare" in response.text:
+            print(f"[!] Cloudflare is still blocking the Google Proxy for {venue_display_name}.")
             return []
 
+        data = response.json()
+        
         if isinstance(data, dict) and "error" in data:
             print(f"[!] Google Script logic error: {data['error']}")
             return []
 
         for item in data:
             try:
-                raw_name = item.get('name', '')
-                if not raw_name or (venue_display_name.upper() in raw_name.upper() and len(raw_name) < 20):
+                # The REST API uses 'title' or artist names instead of 'name'
+                raw_name = item.get('title', '')
+                if not raw_name:
+                    # Fallback for BIT REST API format
+                    artists = item.get('lineup', [])
+                    raw_name = ", ".join(artists) if artists else "Unknown Show"
+
+                # Filter out generic venue name entries
+                if venue_display_name.upper() in raw_name.upper() and len(raw_name) < 20:
                     continue
 
                 clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
@@ -91,17 +98,27 @@ def fetch_via_proxy(venue_id, venue_display_name):
                 unique_id = f"prx-{venue_id}-{date_str}-{clean_name[:10]}".lower()
                 unique_id = re.sub(r'[^a-z0-9-]', '', unique_id)
 
+                # Find the ticket URL (offers list)
+                ticket_url = f"https://www.bandsintown.com/v/{venue_id}"
+                offers = item.get('offers', [])
+                for offer in offers:
+                    if offer.get('type') == 'Tickets':
+                        ticket_url = offer.get('url')
+                        break
+
                 found_events.append({
                     "tm_id": unique_id,
                     "name": clean_name,
                     "date_time": event_date,
                     "venue_name": venue_display_name,
-                    "ticket_url": item.get('url', f"https://www.bandsintown.com/v/{venue_id}")
+                    "ticket_url": ticket_url
                 })
-            except: continue
+            except Exception as e: 
+                continue
+                
         print(f"[+] {venue_display_name}: Found {len(found_events)} events.")
     except Exception as e:
-        print(f"[!] Proxy Connection Failed: {e}")
+        print(f"[!] Proxy Request Failed: {e}")
     return found_events
 
 # --- 5. Sync ---
