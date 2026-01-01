@@ -28,15 +28,15 @@ engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # --- 2. GOOGLE PROXY CONFIGURATION ---
-# PASTE YOUR NEW GOOGLE URL HERE
-GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbwqYKmX_vvGQrVB2PVJs2Y9pb5EOedBGZWEaM1u98TkLdrS0q31PJesohBArDq5oaqXPw/exec"
+# IMPORTANT: PASTE YOUR NEW DEPLOYMENT URL HERE
+GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbwTZFtCNowmREf3JH8tdiclejYi0m5wkORlfG8syXvqM8ZSsM3RL8ehLpgyGfizrMPbuw/exec"
 
 # --- 3. Ticketmaster Scraper ---
 def fetch_ticketmaster():
     events = []
     api_key = os.getenv("TM_API_KEY")
     if not api_key: 
-        print("[-] Ticketmaster: No API key.")
+        print("[-] Ticketmaster: No TM_API_KEY found in Railway variables.")
         return events
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100&sort=date,asc"
     try:
@@ -58,23 +58,24 @@ def fetch_ticketmaster():
 
 # --- 4. The Proxy Scraper ---
 def fetch_via_proxy(venue_id, venue_display_name):
-    if "YOUR_NEW_URL" in GOOGLE_PROXY_URL:
-        print(f"[-] Skipping {venue_display_name}: Proxy URL not set.")
+    if "YOUR_NEW_DEPLOYED" in GOOGLE_PROXY_URL or not GOOGLE_PROXY_URL:
+        print(f"[-] Skipping {venue_display_name}: Proxy URL not configured.")
         return []
     
     found_events = []
     print(f"[*] Fetching {venue_display_name} via Proxy...")
     try:
-        # Note: We must use the exact URL from Google
         response = requests.get(f"{GOOGLE_PROXY_URL}?venueId={venue_id}", timeout=30)
         
-        if response.status_code != 200:
-            print(f"[!] Proxy returned error {response.status_code}")
+        # Check if the response is actually JSON
+        try:
+            data = response.json()
+        except Exception:
+            print(f"[!] Proxy for {venue_display_name} returned HTML/Text instead of JSON. Check Google Script permissions.")
             return []
-            
-        data = response.json()
+
         if isinstance(data, dict) and "error" in data:
-            print(f"[!] Google Script Error: {data['error']}")
+            print(f"[!] Google Script logic error: {data['error']}")
             return []
 
         for item in data:
@@ -100,7 +101,7 @@ def fetch_via_proxy(venue_id, venue_display_name):
             except: continue
         print(f"[+] {venue_display_name}: Found {len(found_events)} events.")
     except Exception as e:
-        print(f"[!] Proxy Request Failed: {e}")
+        print(f"[!] Proxy Connection Failed: {e}")
     return found_events
 
 # --- 5. Sync ---
@@ -111,12 +112,10 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
-            # Check for Date + Venue + Name overlap
             existing = db.query(Event).filter(
                 and_(
                     Event.date_time == event_data['date_time'],
-                    Event.venue_name == event_data['venue_name'],
-                    Event.name == event_data['name']
+                    Event.venue_name == event_data['venue_name']
                 )
             ).first()
             if not existing:
@@ -127,6 +126,7 @@ def sync_to_db(combined_list):
         db.commit()
     except Exception as e:
         print(f"[!] DB Error: {e}")
+        db.rollback()
     finally:
         db.close()
     return new_count
