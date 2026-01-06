@@ -7,7 +7,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from collections import defaultdict
 
-# --- Database Setup ---
 Base = declarative_base()
 class Event(Base):
     __tablename__ = 'events'
@@ -33,8 +32,6 @@ def read_root():
     db = SessionLocal()
     try:
         raw_events = db.query(Event).order_by(Event.date_time).all()
-        
-        # Deduplication / Grouping by Date and Venue
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         for e in raw_events:
@@ -44,7 +41,6 @@ def read_root():
 
         rows = ""
         sorted_keys = sorted(grouped_events.keys(), key=lambda x: x[0])
-        
         for date, venue in sorted_keys:
             data = grouped_events[(date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
