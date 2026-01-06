@@ -21,37 +21,44 @@ SessionLocal = sessionmaker(bind=engine)
 
 # Data we manually verified from your uploaded screenshot
 VERIFIED_529_DATA = [
+    {"date": "2026-01-18", "name": "The Warsaw Clinic (Dirty Holly, Grudgestep)"},
+    {"date": "2026-01-19", "name": "Anti-Sapien (Borzoi, Feel Visit, Sewage Bath)"},
+    {"date": "2026-01-20", "name": "ENMY (Softspoken, Summer Hoop)"},
+    {"date": "2026-01-22", "name": "SUMPP (Local Support)"},
     {"date": "2026-01-23", "name": "High On Fire (w/ Hot Ram, Cheap Cigar)"},
     {"date": "2026-01-24", "name": "High On Fire (w/ Apostle, Big Oaf)"},
-    {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire)"},
-    {"date": "2026-01-31", "name": "Too Hot For Leather (w/ Vices of Vanity)"}
+    {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire, Rosa Asphyxia)"},
+    {"date": "2026-01-30", "name": "Joshua Quimby (Solo)"},
+    {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
 ]
 
-def sync_verified_data():
-    print("[*] Syncing verified screenshot data...")
+def clean_and_sync_529():
+    print("[*] Cleaning and Syncing verified 529 data...")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    added = 0
     try:
+        # 1. DELETE all existing 529 entries to clear the "doubles"
+        db.query(Event).filter(Event.venue_name == "529").delete()
+        
+        # 2. Inject the clean data from the screenshot
+        added = 0
         for item in VERIFIED_529_DATA:
             dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
-            # Use a 'verified' prefix to distinguish these from scraped items
             unique_id = f"verified-529-{item['date']}"
             
-            existing = db.query(Event).filter_by(tm_id=unique_id).first()
-            if not existing:
-                db.add(Event(
-                    tm_id=unique_id,
-                    name=item['name'],
-                    date_time=dt,
-                    venue_name="529",
-                    ticket_url="https://529atlanta.com/calendar/"
-                ))
-                added += 1
+            db.add(Event(
+                tm_id=unique_id,
+                name=item['name'],
+                date_time=dt,
+                venue_name="529",
+                ticket_url="https://529atlanta.com/calendar/"
+            ))
+            added += 1
+            
         db.commit()
-        print(f"[+] Sync complete. Added {added} verified shows.")
+        print(f"[+] 529 database cleaned. Added {added} verified shows.")
     finally:
         db.close()
 
 if __name__ == "__main__":
-    sync_verified_data()
+    clean_and_sync_529()

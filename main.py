@@ -1,12 +1,10 @@
 import os
-import subprocess
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+import time
+from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# --- Database Setup ---
 Base = declarative_base()
 class Event(Base):
     __tablename__ = 'events'
@@ -21,57 +19,46 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-app = FastAPI()
+# Data we manually verified from your uploaded screenshot
+VERIFIED_529_DATA = [
+    {"date": "2026-01-18", "name": "The Warsaw Clinic (Dirty Holly, Grudgestep)"},
+    {"date": "2026-01-19", "name": "Anti-Sapien (Borzoi, Feel Visit, Sewage Bath)"},
+    {"date": "2026-01-20", "name": "ENMY (Softspoken, Summer Hoop)"},
+    {"date": "2026-01-22", "name": "SUMPP (Local Support)"},
+    {"date": "2026-01-23", "name": "High On Fire (w/ Hot Ram, Cheap Cigar)"},
+    {"date": "2026-01-24", "name": "High On Fire (w/ Apostle, Big Oaf)"},
+    {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire, Rosa Asphyxia)"},
+    {"date": "2026-01-30", "name": "Joshua Quimby (Solo)"},
+    {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
+]
 
-@app.on_event("startup")
-async def startup_event():
-    # Runs the collector in the background
-    subprocess.Popen(["python", "collector.py"])
-
-@app.get("/", response_class=HTMLResponse)
-def read_root():
+def clean_and_sync_529():
+    print("[*] Cleaning and Syncing verified 529 data...")
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        events = db.query(Event).order_by(Event.date_time).all()
+        # 1. DELETE all existing 529 entries to clear the "doubles"
+        db.query(Event).filter(Event.venue_name == "529").delete()
         
-        # Build a simple HTML table
-        rows = ""
-        for e in events:
-            # Highlight High on Fire rows in yellow
-            bg_color = "#fff9c4" if "High on Fire" in e.name else "white"
-            rows += f"""
-            <tr style="background-color: {bg_color}; border-bottom: 1px solid #ddd;">
-                <td style="padding: 10px;">{e.date_time}</td>
-                <td style="padding: 10px;"><strong>{e.name}</strong></td>
-                <td style="padding: 10px;">{e.venue_name}</td>
-                <td style="padding: 10px;"><a href="{e.ticket_url}" target="_blank">Tickets</a></td>
-            </tr>
-            """
-
-        return f"""
-        <html>
-            <head>
-                <title>Atlanta Show Finder</title>
-                <style>
-                    body {{ font-family: sans-serif; margin: 40px; line-height: 1.6; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                    th {{ text-align: left; background: #333; color: white; padding: 10px; }}
-                </style>
-            </head>
-            <body>
-                <h1>🤘 Atlanta Show Calendar</h1>
-                <p>Found {len(events)} upcoming events.</p>
-                <table>
-                    <tr>
-                        <th>Date</th>
-                        <th>Artist</th>
-                        <th>Venue</th>
-                        <th>Link</th>
-                    </tr>
-                    {rows}
-                </table>
-            </body>
-        </html>
-        """
+        # 2. Inject the clean data from the screenshot
+        added = 0
+        for item in VERIFIED_529_DATA:
+            dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
+            unique_id = f"verified-529-{item['date']}"
+            
+            db.add(Event(
+                tm_id=unique_id,
+                name=item['name'],
+                date_time=dt,
+                venue_name="529",
+                ticket_url="https://529atlanta.com/calendar/"
+            ))
+            added += 1
+            
+        db.commit()
+        print(f"[+] 529 database cleaned. Added {added} verified shows.")
     finally:
         db.close()
+
+if __name__ == "__main__":
+    clean_and_sync_529()
