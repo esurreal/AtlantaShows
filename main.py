@@ -25,6 +25,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
+    # Run the collector once on startup
     subprocess.Popen(["python", "collector.py"])
 
 @app.get("/", response_class=HTMLResponse)
@@ -32,8 +33,9 @@ def read_root():
     db = SessionLocal()
     try:
         raw_events = db.query(Event).order_by(Event.date_time).all()
-        grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
+        # Deduplication logic remains the same
+        grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         for e in raw_events:
             key = (e.date_time, e.venue_name)
             grouped_events[key]["artists"].add(e.name)
