@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -27,8 +27,6 @@ V529 = "529"
 
 VERIFIED_DATA = {
     V529: [
-        {"date": "2026-01-03", "name": "Edwin & My Folks (w/ Rahbi, Hannah)"},
-        {"date": "2026-01-04", "name": "Fatal Attraction (Metal Night)"},
         {"date": "2026-01-08", "name": "Downbeats & Distortions (Lovehex, Nitsirt)"},
         {"date": "2026-01-09", "name": "The Taj Motel Trio (Analog Day Dream)"},
         {"date": "2026-01-10", "name": "Nick Nasty (Close To Midnight)"},
@@ -105,23 +103,28 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Rebuilding database with full January schedules...")
+        print("[*] Rebuilding database...")
         tm_list = fetch_ticketmaster()
         db.query(Event).delete()
         
-        # Add Ticketmaster (skipping manual venue overlaps)
+        today = date.today()
+
+        # Add TM
         for e in tm_list:
+            event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
+            if event_date < today: continue # Skip past TM shows
+            
             if any(v.lower() in e['venue'].lower() for v in ["boggs", "the earl", "529"]):
                 continue
             db.add(Event(
                 tm_id=e['id'],
                 name=e['name'],
-                date_time=datetime.strptime(e['date'], "%Y-%m-%d").date(),
+                date_time=event_date,
                 venue_name=e['venue'],
                 ticket_url=e['url']
             ))
         
-        # Add Manual Verified Data
+        # Add Manual Verified
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
@@ -129,6 +132,8 @@ def clean_and_sync():
             
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
+                if dt < today: continue # Skip past manual shows
+                
                 db.add(Event(
                     tm_id=f"man-{venue[:3].lower()}-{item['date']}-{item['name'][:5].lower()}",
                     name=item['name'],
@@ -137,7 +142,7 @@ def clean_and_sync():
                     ticket_url=link
                 ))
         db.commit()
-        print("[+] Sync complete.")
+        print("[+] Sync complete. Past shows removed.")
     finally:
         db.close()
 

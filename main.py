@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from collections import defaultdict
+from datetime import date
 
 Base = declarative_base()
 class Event(Base):
@@ -30,11 +31,17 @@ async def startup_event():
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     db = SessionLocal()
+    today = date.today()
     try:
+        # Pull everything, but we will filter in the loop
         raw_events = db.query(Event).order_by(Event.date_time).all()
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         for e in raw_events:
+            # Final safety check: ignore past shows
+            if e.date_time < today:
+                continue
+                
             v_norm = e.venue_name
             if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
             key = (e.date_time, v_norm)
@@ -43,11 +50,10 @@ def read_root():
 
         rows = ""
         sorted_keys = sorted(grouped_events.keys(), key=lambda x: x[0])
-        for date, venue in sorted_keys:
-            data = grouped_events[(date, venue)]
+        for event_date, venue in sorted_keys:
+            data = grouped_events[(event_date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Expanded Metal/Heavy highlighting
             metal_keywords = [
                 "high on fire", "ritual arcana", "nunslaughter", "atoll", 
                 "deceased", "vio-lence", "primeval well", "fatal attraction", 
@@ -58,7 +64,7 @@ def read_root():
             
             rows += f"""
             <tr style="{highlight}">
-                <td>{date.strftime('%a, %b %d')}</td>
+                <td>{event_date.strftime('%a, %b %d')}</td>
                 <td><strong>{full_lineup}</strong></td>
                 <td>{venue}</td>
                 <td><a href="{data['link']}" target="_blank">Tickets</a></td>
@@ -85,7 +91,7 @@ def read_root():
             <body>
                 <div class="container">
                     <h1>🤘 ATL Show Finder</h1>
-                    <div class="subtitle">Complete Calendar: Boggs, Earl, 529 & Ticketmaster</div>
+                    <div class="subtitle">Upcoming Calendar: Boggs, Earl, 529 & Ticketmaster</div>
                     <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands or venues...">
                     <table id="eventTable">
                         <thead>
