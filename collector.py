@@ -22,50 +22,52 @@ engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
 def fetch_529():
-    print("[*] Scraping 529 Atlanta via Proximity Search...")
+    print("[*] Scraping 529 Atlanta (Deep Scan Mode)...")
     events = []
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             page = browser.new_page()
             page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=90000)
             
-            # Wait for the band name to appear
-            try:
-                hof_elements = page.get_by_text("High on Fire", exact=False)
-                page.wait_for_selector("text=High on Fire", timeout=20000)
-                
-                count = hof_elements.count()
-                print(f"[+] Found {count} instances of High on Fire.")
+            # Wait for the content to actually exist
+            page.wait_for_selector("text=High on Fire", timeout=20000)
+            
+            # Extract all text and normalize it (remove tabs and double spaces)
+            raw_text = page.locator("body").inner_text()
+            clean_text = " ".join(raw_text.split())
+            
+            print(f"[Debug] Normalized Snippet: {clean_text[:200]}")
 
-                for i in range(count):
-                    # For each "High on Fire" mention, look at the surrounding text block
-                    # Squarespace and WordPress often put the date in a 'time' tag 
-                    # or a sibling div. We'll grab the parent container's text.
-                    container_text = hof_elements.nth(i).locator("xpath=..").inner_text()
-                    
-                    # Also try the parent's parent just in case
-                    wide_text = hof_elements.nth(i).locator("xpath=../..").inner_text()
-                    
-                    combined = container_text + " " + wide_text
-                    
-                    # Search for the date in this specific small block of text
-                    date_match = re.search(r"([a-zA-Z]{3}\s+\d{1,2},\s+202\d)", combined)
-                    
-                    if date_match:
-                        date_str = date_match.group(1).strip()
+            # This regex looks for: 
+            # 1. A month (Jan/January)
+            # 2. A day (23)
+            # 3. A year (2026)
+            # 4. Up to 100 characters of anything
+            # 5. "High on Fire"
+            pattern = r"([a-zA-Z]{3,9}\s+\d{1,2},\s+202\d).*?(High\s+on\s+Fire)"
+            
+            matches = re.finditer(pattern, clean_text, re.IGNORECASE)
+            
+            for m in matches:
+                try:
+                    date_str = m.group(1).strip()
+                    # Use a flexible date parser for "Jan 23, 2026" or "January 23, 2026"
+                    try:
                         clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
-                        print(f"[!] Success! Found date {clean_date} for High on Fire")
+                    except:
+                        clean_date = datetime.strptime(date_str, "%B %d, %Y").date()
                         
-                        events.append({
-                            "tm_id": f"529-{clean_date}-hof",
-                            "name": "High On Fire",
-                            "date_time": clean_date,
-                            "venue_name": "529",
-                            "ticket_url": "https://529atlanta.com/calendar/"
-                        })
-            except Exception as e:
-                print(f"[!] Proximity search failed: {e}")
+                    print(f"[!] SUCCESS: Found {clean_date}")
+                    events.append({
+                        "tm_id": f"529-{clean_date}-hof",
+                        "name": "High On Fire",
+                        "date_time": clean_date,
+                        "venue_name": "529",
+                        "ticket_url": "https://529atlanta.com/calendar/"
+                    })
+                except Exception as e:
+                    print(f"[!] Date Parse Error: {e}")
             
             browser.close()
     except Exception as e: 
@@ -74,22 +76,19 @@ def fetch_529():
 
 def sync_to_db(data):
     if not data: 
-        print("[!] Still no dates captured. Venue site layout is non-standard.")
+        print("[!] No High on Fire shows matched the date pattern.")
         return
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     new_count = 0
     for item in data:
-        # Use a more robust check for existing items
-        existing = db.query(Event).filter(
-            and_(Event.date_time == item['date_time'], Event.name == item['name'])
-        ).first()
+        existing = db.query(Event).filter_by(tm_id=item['tm_id']).first()
         if not existing:
             db.add(Event(**item))
             new_count += 1
     db.commit()
     db.close()
-    print(f"[+] SUCCESS! Added {new_count} High on Fire shows.")
+    print(f"[+] Synced {new_count} shows to database.")
 
 if __name__ == "__main__":
     time.sleep(5)
