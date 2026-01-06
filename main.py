@@ -35,10 +35,8 @@ def read_root():
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         for e in raw_events:
-            # Normalize venue names for grouping (e.g., Boggs vs Boggs Supply)
             v_norm = e.venue_name
             if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
-            
             key = (e.date_time, v_norm)
             grouped_events[key]["artists"].add(e.name)
             grouped_events[key]["link"] = e.ticket_url
@@ -49,8 +47,8 @@ def read_root():
             data = grouped_events[(date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Metal highlighting logic
-            metal_keywords = ["high on fire", "ritual arcana", "nunslaughter", "atoll", "deceased", "vio-lence", "primeval well"]
+            # Heavy/Metal keywords for yellow highlighting
+            metal_keywords = ["high on fire", "ritual arcana", "nunslaughter", "atoll", "deceased", "vio-lence", "primeval well", "fatal attraction", "kado dupré"]
             is_metal = any(kw in full_lineup.lower() for kw in metal_keywords)
             highlight = "background-color: #fff9c4;" if is_metal else ""
             
@@ -77,6 +75,7 @@ def read_root():
                     th {{ background: #1a1a1a; color: white; padding: 12px; text-align: left; }}
                     td {{ padding: 12px; border-bottom: 1px solid #eee; color: #444; }}
                     tr:hover {{ background-color: #f8f9fa; }}
+                    a {{ color: #007bff; text-decoration: none; font-weight: bold; }}
                 </style>
             </head>
             <body>

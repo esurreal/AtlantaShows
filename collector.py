@@ -20,20 +20,27 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-# Standardize names for local venues to prevent duplicates
+# Standardize names
 BOGGS = "Boggs Social & Supply"
 EARL = "The EARL"
 V529 = "529"
 
 VERIFIED_DATA = {
     V529: [
+        {"date": "2026-01-08", "name": "Downbeats & Distortions (Lovehex, Nitsirt)"},
+        {"date": "2026-01-09", "name": "The Taj Motel Trio (Analog Day Dream, Stepmoms)"},
+        {"date": "2026-01-10", "name": "Nick Nasty (Close To Midnight, Heroes For Ghosts)"},
+        {"date": "2026-01-14", "name": "The Cosmic Mic (Open Mic)"},
+        {"date": "2026-01-15", "name": "Elysium / After All This / Winder"},
+        {"date": "2026-01-16", "name": "Phamily & Friends Tour (Unfaced Ree, Veda Janee)"},
+        {"date": "2026-01-17", "name": "Kado Dupré (Chris Harry, Mattie B)"},
         {"date": "2026-01-18", "name": "The Warsaw Clinic (Dirty Holly, Grudgestep)"},
         {"date": "2026-01-19", "name": "Anti-Sapien (Borzoi, Feel Visit, Sewage Bath)"},
         {"date": "2026-01-20", "name": "ENMY (Softspoken, Summer Hoop)"},
         {"date": "2026-01-22", "name": "SUMPP (Local Support)"},
-        {"date": "2026-01-23", "name": "High On Fire (w/ Hot Ram, Cheap Cigar)"},
-        {"date": "2026-01-24", "name": "High On Fire (w/ Apostle, Big Oaf)"},
-        {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire, Rosa Asphyxia)"},
+        {"date": "2026-01-23", "name": "High On Fire (Night 1 w/ Hot Ram)"},
+        {"date": "2026-01-24", "name": "High On Fire (Night 2 w/ Apostle)"},
+        {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire)"},
         {"date": "2026-01-30", "name": "Joshua Quimby (Solo)"},
         {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
     ],
@@ -45,11 +52,10 @@ VERIFIED_DATA = {
         {"date": "2026-01-09", "name": "Ozello / Kyle Lewis / Yankee Roses"},
         {"date": "2026-01-10", "name": "Elijah Cruise / MENU / Dogwood"},
         {"date": "2026-01-17", "name": "The Carolyn / Knives / Wes Hoffman"},
-        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm / The Outfield Clovers"},
+        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm"},
         {"date": "2026-01-31", "name": "Palaces / Muelas / Leafblower"},
         {"date": "2026-02-05", "name": "Ritual Arcana (Wino, SharLee LuckyFree)"},
         {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill / Squelching"},
-        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal / Drugula"},
         {"date": "2026-02-12", "name": "Primeval Well"}
     ]
 }
@@ -74,20 +80,14 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Rebuilding complete database...")
-        
-        # 1. Fetch Ticketmaster data first
+        print("[*] Rebuilding database with full January schedules...")
         tm_list = fetch_ticketmaster()
-        
-        # 2. CLEAR ALL to start fresh (Safest way to avoid name-mismatch duplicates)
         db.query(Event).delete()
         
-        # 3. Add TM data first
+        # Add Ticketmaster (skipping manual venue overlaps)
         for e in tm_list:
-            # Skip TM entries for Boggs/Earl/529 so our manual verified data wins
             if any(v.lower() in e['venue'].lower() for v in ["Boggs", "The Earl", "529"]):
                 continue
-                
             db.add(Event(
                 tm_id=e['id'],
                 name=e['name'],
@@ -96,7 +96,7 @@ def clean_and_sync():
                 ticket_url=e['url']
             ))
         
-        # 4. Add Manual Verified Data (Our "Source of Truth")
+        # Add Manual Verified Data
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
@@ -110,9 +110,8 @@ def clean_and_sync():
                     venue_name=venue,
                     ticket_url=link
                 ))
-
         db.commit()
-        print(f"[+] Sync complete. Database is clean.")
+        print("[+] Sync complete.")
     finally:
         db.close()
 
