@@ -23,7 +23,7 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# --- 2. 529 Scraper (Mobile Mode) ---
+# --- 2. 529 Direct Scraper (Sunday Calendar Specialist) ---
 def fetch_529_direct():
     print("[*] Scraping 529 Atlanta...")
     events = []
@@ -32,26 +32,35 @@ def fetch_529_direct():
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            # Using a mobile user agent often speeds up loading and bypasses heavy scripts
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1"
-            )
+            context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             page = context.new_page()
+            
+            # Navigate to the calendar
             page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=60000)
+            time.sleep(6) # Extra time for the calendar grid to populate
             
-            time.sleep(5) # Let the text render
-            content = page.locator("body").inner_text()
+            # 529 often uses a 'list' view or a table. We'll grab all text in the main content area.
+            content = page.locator(".entry-content").inner_text()
             
-            # Pattern: Day, Jan 23, 2026 – Artist
-            pattern = r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([a-zA-Z]{3}\s+\d{1,2},\s+202\d)\s+–\s+(.*?)(?=\s+Tickets|\s+Info|$)"
+            # Print a snippet to logs so we can debug if it fails again
+            print(f"[Debug] 529 Text Snippet: {content[:200].replace('\n', ' ')}")
+
+            # Pattern optimized for: "Friday, Jan 23, 2026 - High On Fire" 
+            # or "Jan 23, 2026. High On Fire"
+            pattern = r"([a-zA-Z]{3}\s+\d{1,2},\s+202\d).*?[\-\.\–\—]\s*(.*?)(?=\n|Tickets|Info|$)"
             
             matches = re.finditer(pattern, content, re.IGNORECASE)
             for m in matches:
                 try:
                     date_str = m.group(1).strip()
                     artist_raw = m.group(2).strip()
-                    clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
+                    
+                    # Clean up the artist name
                     artist = re.sub(r'^(Night \d\.\s+|529 Presents:\s+|w\/\s+)', '', artist_raw, flags=re.I).strip()
+                    artist = artist.split('\n')[0].strip()
+                    
+                    # Convert "Jan 23, 2026" to date object
+                    clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
                     
                     if artist and len(artist) > 2:
                         events.append({
@@ -62,6 +71,7 @@ def fetch_529_direct():
                             "ticket_url": "https://529atlanta.com/calendar/"
                         })
                 except: continue
+            
             browser.close()
             print(f"[+] 529: Found {len(events)} shows.")
     except Exception as e: print(f"[!] 529 Error: {e}")
@@ -74,20 +84,19 @@ def fetch_boggs_direct():
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            page = context.new_page()
+            page = browser.new_page()
             page.goto("https://www.boggssocial.com/events", wait_until="domcontentloaded", timeout=60000)
+            time.sleep(4)
             
-            time.sleep(3)
-            elements = page.locator("article.eventlist-event").all()
-            for el in elements:
+            articles = page.locator("article.eventlist-event").all()
+            for art in articles:
                 try:
-                    title = el.locator(".eventlist-title").inner_text()
-                    date_raw = el.locator("time.eventlist-meta-time").get_attribute("datetime")
+                    title = art.locator("h1.eventlist-title").inner_text()
+                    date_val = art.locator("time.eventlist-meta-time").get_attribute("datetime")
                     events.append({
-                        "tm_id": f"boggs-{date_raw}-{title[:5].lower()}",
+                        "tm_id": f"boggs-{date_val}-{title[:5].lower().replace(' ', '')}",
                         "name": title.strip(),
-                        "date_time": datetime.strptime(date_raw, "%Y-%m-%d").date(),
+                        "date_time": datetime.strptime(date_val, "%Y-%m-%d").date(),
                         "venue_name": "Boggs Social",
                         "ticket_url": "https://www.boggssocial.com/events"
                     })
@@ -114,7 +123,7 @@ def fetch_earl_bit():
                     items = data if isinstance(data, list) else data.get('@graph', [data])
                     for item in items:
                         if isinstance(item, dict) and 'startDate' in item:
-                            name = item.get('name', '').split('@')[0].strip()
+                            name = item.get('name', '').split('@')[0].split('at')[0].strip()
                             date_str = item.get('startDate', '').split('T')[0]
                             events.append({
                                 "tm_id": f"bit-earl-{date_str}-{name[:5].lower()}",
@@ -149,14 +158,11 @@ def sync_to_db(combined_list):
     return new_count
 
 if __name__ == "__main__":
-    # Give the web server 10 seconds to start before we bog down the CPU with scraping
-    print("--- Collector waiting for web server ---")
+    # Wait for web server to avoid 502
     time.sleep(10)
-    
     all_shows = []
     all_shows.extend(fetch_529_direct())
     all_shows.extend(fetch_boggs_direct())
     all_shows.extend(fetch_earl_bit())
-
     added = sync_to_db(all_shows)
     print(f"--- Finished. Added {added} new shows. ---")
