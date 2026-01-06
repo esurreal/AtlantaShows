@@ -1,12 +1,13 @@
 import os
 import re
-import json
 import time
 from datetime import datetime
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-from sqlalchemy import create_engine, Column, String, Date, Text, and_
+from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+# --- Database Setup ---
 Base = declarative_base()
 class Event(Base):
     __tablename__ = 'events'
@@ -21,78 +22,77 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-def fetch_529():
-    print("[*] Scraping 529 Atlanta (Grid-Buster Mode)...")
-    events = []
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            page = browser.new_page()
-            page.goto("https://529atlanta.com/calendar/", wait_until="networkidle", timeout=90000)
+def scrape_529_direct():
+    print("[*] Cracking 529 Atlanta Calendar...")
+    shows = []
+    
+    with sync_playwright() as p:
+        # 1. Launch Browser
+        browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+        page = browser.new_page()
+        
+        # 2. Go to the site and wait for the specific calendar classes to appear
+        try:
+            page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=60000)
+            print("[*] Page loaded, waiting for JavaScript to build the calendar...")
             
-            # Wait for the calendar to load
-            page.wait_for_selector("text=High on Fire", timeout=20000)
-
-            # We use JavaScript to find the day number associated with the band name
-            # This looks for the 'High on Fire' text and finds the nearest day number in the grid
-            script = """
-            () => {
-                let results = [];
-                let items = Array.from(document.querySelectorAll('*')).filter(el => 
-                    el.textContent.includes('High on Fire') && el.children.length === 0
-                );
+            # This is the specific class 529's plugin uses for titles
+            page.wait_for_selector(".simcal-event-title", timeout=30000)
+            
+            # 3. Pull the "Resolved" HTML (the stuff requests can't see)
+            html_content = page.content()
+            soup = BeautifulSoup(html_content, "lxml")
+            
+            # 4. Use your BeautifulSoup logic on the rendered HTML
+            # 529's plugin puts dates in 'dt' tags and titles in '.simcal-event-title'
+            calendar_items = soup.find_all("li", class_="simcal-event")
+            
+            for item in calendar_items:
+                title_el = item.select_one(".simcal-event-title")
+                # The date is usually hidden in a data attribute or a sibling span
+                # We'll look for the most common placement
+                details = item.get_text()
                 
-                items.forEach(item => {
-                    // Look up the DOM tree for a container that might have a date/day number
-                    let parent = item.closest('td, .day, .event, [class*="calendar"]');
-                    if (parent) {
-                        results.append(parent.innerText);
-                    } else {
-                        results.push(item.parentElement.innerText);
-                    }
-                });
-                return results;
-            }
-            """
-            # Fallback: Just get the text of every 'day' square in the calendar
-            # This is usually how these WordPress calendars work
-            elements = page.locator(".simcal-event-title, .event-title, td").all()
-            
-            full_content = page.locator("body").inner_text()
-            
-            # If it's a grid, the days usually appear as "23" and the event follows.
-            # Let's try to capture the '23' and '24' specifically for High on Fire.
-            for day in ["23", "24"]:
-                if "High on Fire" in full_content:
-                    date_obj = datetime(2026, 1, int(day)).date()
-                    print(f"[!] Manually verifying date for High on Fire: Jan {day}, 2026")
-                    events.append({
-                        "tm_id": f"529-2026-01-{day}-hof",
-                        "name": "High On Fire",
-                        "date_time": date_obj,
-                        "venue_name": "529",
-                        "ticket_url": "https://529atlanta.com/calendar/"
-                    })
-            
+                if title_el and ("High on Fire" in title_el.text or "High On Fire" in title_el.text):
+                    artist = title_el.text.strip()
+                    
+                    # We look for the date in the parent or surrounding text
+                    # Regex to find "Jan 23, 2026" inside the event block
+                    date_match = re.search(r"([a-zA-Z]{3}\s+\d{1,2},\s+202\d)", details)
+                    
+                    if date_match:
+                        date_str = date_match.group(1)
+                        clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
+                        
+                        print(f"[!] Cracked it! Found {artist} on {clean_date}")
+                        shows.append({
+                            "tm_id": f"529-{clean_date}-hof",
+                            "name": artist,
+                            "date_time": clean_date,
+                            "venue_name": "529",
+                            "ticket_url": "https://529atlanta.com/calendar/"
+                        })
+        except Exception as e:
+            print(f"[!] Error during crack: {e}")
+        finally:
             browser.close()
-    except Exception as e: 
-        print(f"[!] Scraper crashed: {e}")
-    return events
+            
+    return shows
 
 def sync_to_db(data):
-    if not data: return
+    if not data:
+        print("[!] No shows found. Selector might be off or site blocked the IP.")
+        return
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    new_count = 0
     for item in data:
         if not db.query(Event).filter_by(tm_id=item['tm_id']).first():
             db.add(Event(**item))
-            new_count += 1
     db.commit()
     db.close()
-    print(f"[+] Synced {new_count} shows to database.")
+    print(f"[+] Synced {len(data)} items.")
 
 if __name__ == "__main__":
     time.sleep(5)
-    all_data = fetch_529()
-    sync_to_db(all_data)
+    events = scrape_529_direct()
+    sync_to_db(events)
