@@ -56,10 +56,14 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
     venue_events = []
     print(f"[*] Scraping {venue_display_name} via Playwright...")
     
+    # Force Playwright to look at the custom path we defined in the build log
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.getenv("PLAYWRIGHT_BROWSERS_PATH", "/app/pw-browsers")
+
     try:
         with sync_playwright() as p:
-            # Arguments optimized for cloud/Railway environments
             try:
+                # We use chromium.launch but it will automatically find the 
+                # 'chromium_headless_shell' downloaded in your build log
                 browser = p.chromium.launch(
                     headless=True,
                     args=[
