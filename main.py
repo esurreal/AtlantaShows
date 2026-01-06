@@ -53,13 +53,12 @@ def read_root():
             data = grouped_events[(event_date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Format classes for JS filtering
-            is_today = "today" if event_date == today else ""
-            month_class = f"m-{event_date.month}"
-            
-            # Store raw date for easier JS comparison
+            # Month is 0-indexed in JS, so we store it carefully
             rows += f"""
-            <tr class="event-row {is_today} {month_class}" data-date="{event_date.isoformat()}">
+            <tr class="event-row" 
+                data-date="{event_date.isoformat()}" 
+                data-month="{event_date.month - 1}" 
+                data-year="{event_date.year}">
                 <td>{event_date.strftime('%a, %b %d')}</td>
                 <td><strong>{full_lineup}</strong></td>
                 <td>{venue}</td>
@@ -77,23 +76,27 @@ def read_root():
                     h1 {{ color: #1a1a1a; margin-bottom: 5px; }}
                     .subtitle {{ color: #666; margin-bottom: 20px; }}
                     
-                    /* Search & Filter Styles */
                     .controls {{ display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; }}
                     input {{ width: 100%; padding: 15px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; box-sizing: border-box; }}
-                    .button-group {{ display: flex; gap: 10px; }}
-                    .filter-btn {{ 
-                        padding: 10px 20px; border: none; border-radius: 6px; background: #eee; 
+                    
+                    .nav-bar {{ display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 8px; }}
+                    .button-group {{ display: flex; gap: 8px; }}
+                    .filter-btn, .nav-arrow {{ 
+                        padding: 10px 16px; border: 1px solid #ddd; border-radius: 6px; background: white; 
                         color: #444; cursor: pointer; font-weight: 600; transition: all 0.2s;
                     }}
-                    .filter-btn.active {{ background: #1a1a1a; color: white; }}
-                    .filter-btn:hover {{ background: #ddd; }}
-                    .filter-btn.active:hover {{ background: #333; }}
+                    .filter-btn.active {{ background: #1a1a1a; color: white; border-color: #1a1a1a; }}
+                    .filter-btn:hover, .nav-arrow:hover {{ background: #eee; }}
+                    
+                    .view-label {{ font-weight: bold; color: #1a1a1a; min-width: 150px; text-align: center; }}
 
-                    table {{ width: 100%; border-collapse: collapse; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
                     th {{ background: #1a1a1a; color: white; padding: 12px; text-align: left; }}
                     td {{ padding: 12px; border-bottom: 1px solid #eee; color: #444; }}
                     tr:hover {{ background-color: #f8f9fa; }}
                     a {{ color: #007bff; text-decoration: none; font-weight: bold; }}
+                    
+                    .hidden {{ display: none; }}
                 </style>
             </head>
             <body>
@@ -103,10 +106,19 @@ def read_root():
                     
                     <div class="controls">
                         <input type="text" id="search" onkeyup="runFilters()" placeholder="Search bands or venues...">
-                        <div class="button-group">
-                            <button class="filter-btn active" onclick="setFilter('all', this)">ALL</button>
-                            <button class="filter-btn" onclick="setFilter('month', this)">MONTHLY</button>
-                            <button class="filter-btn" onclick="setFilter('today', this)">DAILY</button>
+                        
+                        <div class="nav-bar">
+                            <div class="button-group">
+                                <button class="filter-btn active" onclick="setFilter('all', this)">ALL</button>
+                                <button class="filter-btn" onclick="setFilter('month', this)">MONTHLY</button>
+                                <button class="filter-btn" onclick="setFilter('today', this)">DAILY</button>
+                            </div>
+                            
+                            <div id="nav-controls" class="button-group hidden">
+                                <button class="nav-arrow" onclick="moveDate(-1)">←</button>
+                                <span id="current-view-label" class="view-label"></span>
+                                <button class="nav-arrow" onclick="moveDate(1)">→</button>
+                            </div>
                         </div>
                     </div>
 
@@ -120,41 +132,67 @@ def read_root():
 
                 <script>
                     let currentFilter = 'all';
+                    let viewingDate = new Date(); // Start with today
+                    viewingDate.setHours(0,0,0,0);
 
                     function setFilter(filter, btn) {{
-                        // Update button UI
                         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                         
                         currentFilter = filter;
+                        const nav = document.getElementById('nav-controls');
+                        
+                        if (filter === 'all') {{
+                            nav.classList.add('hidden');
+                        }} else {{
+                            nav.classList.remove('hidden');
+                            updateLabel();
+                        }}
                         runFilters();
+                    }}
+
+                    function moveDate(direction) {{
+                        if (currentFilter === 'today') {{
+                            viewingDate.setDate(viewingDate.getDate() + direction);
+                        }} else if (currentFilter === 'month') {{
+                            viewingDate.setMonth(viewingDate.getMonth() + direction);
+                        }}
+                        updateLabel();
+                        runFilters();
+                    }}
+
+                    function updateLabel() {{
+                        const label = document.getElementById('current-view-label');
+                        if (currentFilter === 'today') {{
+                            label.innerText = viewingDate.toLocaleDateString('en-US', {{ month: 'short', day: 'numeric', year: 'numeric' }});
+                        } else if (currentFilter === 'month') {{
+                            label.innerText = viewingDate.toLocaleDateString('en-US', {{ month: 'long', year: 'numeric' }});
+                        }}
                     }}
 
                     function runFilters() {{
                         const searchTerm = document.getElementById("search").value.toUpperCase();
                         const rows = document.querySelectorAll(".event-row");
-                        const today = new Date().toISOString().split('T')[0];
-                        const currentMonth = new Date().getMonth();
+                        
+                        const vDay = viewingDate.getDate();
+                        const vMonth = viewingDate.getMonth();
+                        const vYear = viewingDate.getFullYear();
 
                         rows.forEach(row => {{
                             const rowDateStr = row.getAttribute('data-date');
-                            const rowDate = new Date(rowDateStr);
+                            const rowDate = new Date(rowDateStr + 'T00:00:00'); // Prevent timezone shifts
                             const textMatch = row.innerText.toUpperCase().includes(searchTerm);
                             
                             let filterMatch = false;
                             if (currentFilter === 'all') {{
                                 filterMatch = true;
                             }} else if (currentFilter === 'today') {{
-                                filterMatch = rowDateStr === today;
+                                filterMatch = (rowDate.getDate() === vDay && rowDate.getMonth() === vMonth && rowDate.getFullYear() === vYear);
                             }} else if (currentFilter === 'month') {{
-                                filterMatch = rowDate.getMonth() === currentMonth;
+                                filterMatch = (rowDate.getMonth() === vMonth && rowDate.getFullYear() === vYear);
                             }}
 
-                            if (textMatch && filterMatch) {{
-                                row.style.display = "";
-                            }} else {{
-                                row.style.display = "none";
-                            }}
+                            row.style.display = (textMatch && filterMatch) ? "" : "none";
                         }});
                     }}
                 </script>
