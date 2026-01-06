@@ -1,10 +1,12 @@
 import os
-import time
-from datetime import datetime
+import subprocess
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+# --- Database Setup ---
 Base = declarative_base()
 class Event(Base):
     __tablename__ = 'events'
@@ -19,46 +21,71 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-# Data we manually verified from your uploaded screenshot
-VERIFIED_529_DATA = [
-    {"date": "2026-01-18", "name": "The Warsaw Clinic (Dirty Holly, Grudgestep)"},
-    {"date": "2026-01-19", "name": "Anti-Sapien (Borzoi, Feel Visit, Sewage Bath)"},
-    {"date": "2026-01-20", "name": "ENMY (Softspoken, Summer Hoop)"},
-    {"date": "2026-01-22", "name": "SUMPP (Local Support)"},
-    {"date": "2026-01-23", "name": "High On Fire (w/ Hot Ram, Cheap Cigar)"},
-    {"date": "2026-01-24", "name": "High On Fire (w/ Apostle, Big Oaf)"},
-    {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire, Rosa Asphyxia)"},
-    {"date": "2026-01-30", "name": "Joshua Quimby (Solo)"},
-    {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
-]
+# This MUST be named 'app' for Uvicorn to work
+app = FastAPI()
 
-def clean_and_sync_529():
-    print("[*] Cleaning and Syncing verified 529 data...")
-    Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+async def startup_event():
+    # Runs the deduplication and injection script in the background
+    subprocess.Popen(["python", "collector.py"])
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
     db = SessionLocal()
     try:
-        # 1. DELETE all existing 529 entries to clear the "doubles"
-        db.query(Event).filter(Event.venue_name == "529").delete()
-        
-        # 2. Inject the clean data from the screenshot
-        added = 0
-        for item in VERIFIED_529_DATA:
-            dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
-            unique_id = f"verified-529-{item['date']}"
-            
-            db.add(Event(
-                tm_id=unique_id,
-                name=item['name'],
-                date_time=dt,
-                venue_name="529",
-                ticket_url="https://529atlanta.com/calendar/"
-            ))
-            added += 1
-            
-        db.commit()
-        print(f"[+] 529 database cleaned. Added {added} verified shows.")
+        events = db.query(Event).order_by(Event.date_time).all()
+        rows = ""
+        for e in events:
+            # Highlight High on Fire rows in yellow
+            highlight = "background-color: #fff9c4;" if "High on Fire" in e.name else ""
+            rows += f"""
+            <tr style="{highlight}">
+                <td>{e.date_time}</td>
+                <td><strong>{e.name}</strong></td>
+                <td>{e.venue_name}</td>
+                <td><a href="{e.ticket_url}" target="_blank">Tickets</a></td>
+            </tr>
+            """
+
+        return f"""
+        <html>
+            <head>
+                <title>ATL Show Finder</title>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; margin: 0; background: #f0f2f5; }}
+                    .container {{ max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
+                    h1 {{ color: #1a1a1a; margin-top: 0; border-bottom: 3px solid #ffcc00; display: inline-block; padding-bottom: 5px; }}
+                    input {{ width: 100%; padding: 15px; margin: 20px 0; border: 2px solid #eee; border-radius: 8px; font-size: 16px; outline: none; transition: border 0.3s; }}
+                    input:focus {{ border-color: #ffcc00; }}
+                    table {{ width: 100%; border-collapse: collapse; }}
+                    th {{ background: #1a1a1a; color: white; padding: 12px; text-align: left; }}
+                    td {{ padding: 12px; border-bottom: 1px solid #eee; color: #444; }}
+                    tr:hover {{ background-color: #fafafa; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🤘 Atlanta Live Music</h1>
+                    <input type="text" id="search" onkeyup="filterTable()" placeholder="Search by band, venue, or date (e.g. 'High on Fire')...">
+                    <table id="eventTable">
+                        <thead>
+                            <tr><th>Date</th><th>Artist</th><th>Venue</th><th>Link</th></tr>
+                        </thead>
+                        <tbody>{rows}</tbody>
+                    </table>
+                </div>
+                <script>
+                    function filterTable() {{
+                        let input = document.getElementById("search").value.toUpperCase();
+                        let rows = document.getElementById("eventTable").getElementsByTagName("tr");
+                        for (let i = 1; i < rows.length; i++) {{
+                            let text = rows[i].innerText.toUpperCase();
+                            rows[i].style.display = text.includes(input) ? "" : "none";
+                        }}
+                    }}
+                </script>
+            </body>
+        </html>
+        """
     finally:
         db.close()
-
-if __name__ == "__main__":
-    clean_and_sync_529()
