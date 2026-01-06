@@ -35,7 +35,11 @@ def read_root():
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         for e in raw_events:
-            key = (e.date_time, e.venue_name)
+            # Normalize venue names for grouping (e.g., Boggs vs Boggs Supply)
+            v_norm = e.venue_name
+            if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
+            
+            key = (e.date_time, v_norm)
             grouped_events[key]["artists"].add(e.name)
             grouped_events[key]["link"] = e.ticket_url
 
@@ -45,9 +49,9 @@ def read_root():
             data = grouped_events[(date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Highlighting metal shows
-            metal_bands = ["High On Fire", "Ritual Arcana", "Nunslaughter", "Atoll", "Deceased", "Vio-lence"]
-            is_metal = any(band.lower() in full_lineup.lower() for band in metal_bands)
+            # Metal highlighting logic
+            metal_keywords = ["high on fire", "ritual arcana", "nunslaughter", "atoll", "deceased", "vio-lence", "primeval well"]
+            is_metal = any(kw in full_lineup.lower() for kw in metal_keywords)
             highlight = "background-color: #fff9c4;" if is_metal else ""
             
             rows += f"""
@@ -65,7 +69,7 @@ def read_root():
                 <title>ATL Show Finder</title>
                 <style>
                     body {{ font-family: -apple-system, sans-serif; margin: 0; background: #f0f2f5; }}
-                    .container {{ max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
+                    .container {{ max-width: 950px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
                     h1 {{ color: #1a1a1a; margin-bottom: 5px; }}
                     .subtitle {{ color: #666; margin-bottom: 25px; }}
                     input {{ width: 100%; padding: 15px; margin-bottom: 20px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; box-sizing: border-box; }}
@@ -73,13 +77,12 @@ def read_root():
                     th {{ background: #1a1a1a; color: white; padding: 12px; text-align: left; }}
                     td {{ padding: 12px; border-bottom: 1px solid #eee; color: #444; }}
                     tr:hover {{ background-color: #f8f9fa; }}
-                    a {{ color: #007bff; text-decoration: none; font-weight: bold; }}
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>🤘 ATL Show Finder</h1>
-                    <div class="subtitle">Combined Live Feed: Ticketmaster + Local Venues</div>
+                    <div class="subtitle">Complete Calendar: Boggs, Earl, 529 & Ticketmaster</div>
                     <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands or venues...">
                     <table id="eventTable">
                         <thead>
