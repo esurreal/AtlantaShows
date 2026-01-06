@@ -32,9 +32,8 @@ def read_root():
     db = SessionLocal()
     try:
         raw_events = db.query(Event).order_by(Event.date_time).all()
-        
-        # Group by date and venue
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
+        
         for e in raw_events:
             key = (e.date_time, e.venue_name)
             grouped_events[key]["artists"].add(e.name)
@@ -46,9 +45,9 @@ def read_root():
             data = grouped_events[(date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Highlight metal shows (High on Fire, Ritual Arcana, Nunslaughter)
-            metal_bands = ["High On Fire", "Ritual Arcana", "Nunslaughter", "Atoll"]
-            is_metal = any(band in full_lineup for band in metal_bands)
+            # Highlighting metal shows
+            metal_bands = ["High On Fire", "Ritual Arcana", "Nunslaughter", "Atoll", "Deceased", "Vio-lence"]
+            is_metal = any(band.lower() in full_lineup.lower() for band in metal_bands)
             highlight = "background-color: #fff9c4;" if is_metal else ""
             
             rows += f"""
@@ -80,8 +79,8 @@ def read_root():
             <body>
                 <div class="container">
                     <h1>🤘 ATL Show Finder</h1>
-                    <div class="subtitle">Manual & Freshtix Feed (529, Earl, Boggs)</div>
-                    <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands, venues, or dates...">
+                    <div class="subtitle">Combined Live Feed: Ticketmaster + Local Venues</div>
+                    <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands or venues...">
                     <table id="eventTable">
                         <thead>
                             <tr><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr>
