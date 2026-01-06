@@ -34,26 +34,20 @@ def read_root():
     try:
         raw_events = db.query(Event).order_by(Event.date_time).all()
         
-        # --- DEDUPLICATION LOGIC ---
-        # We group shows by (date, venue) to merge lineup members
+        # Deduplication / Grouping by Date and Venue
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         for e in raw_events:
             key = (e.date_time, e.venue_name)
             grouped_events[key]["artists"].add(e.name)
-            # Keep the last link found (usually they share the same ticket link anyway)
             grouped_events[key]["link"] = e.ticket_url
 
         rows = ""
-        # Sort by date again after grouping
         sorted_keys = sorted(grouped_events.keys(), key=lambda x: x[0])
         
         for date, venue in sorted_keys:
             data = grouped_events[(date, venue)]
-            # Join all bands with a " / " separator
             full_lineup = " / ".join(sorted(list(data["artists"])))
-            
-            # Highlight High on Fire residency
             highlight = "background-color: #fff9c4;" if "High on Fire" in full_lineup else ""
             
             rows += f"""
