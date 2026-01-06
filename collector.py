@@ -30,29 +30,35 @@ def fetch_529():
             context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             page = context.new_page()
             
-            # 1. Navigate
             page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=90000)
             
-            # 2. WAIT for the dynamic content. 
-            # We look for "High on Fire" specifically since we know they are playing.
             print("[*] Waiting for calendar content to render...")
             try:
+                # Wait for the specific text to be visible
                 page.wait_for_selector("text=High on Fire", timeout=30000)
                 print("[+] Found High on Fire on page!")
             except:
-                print("[!] Timed out waiting for 'High on Fire' text. Scraping anyway...")
+                print("[!] Could not find 'High on Fire' text via selector.")
 
-            # 3. Get Content
-            content = page.locator("body").inner_text()
+            # Get the text of the entire page content
+            content = page.content() 
+            # We use page.content() to get raw HTML text as well, 
+            # but let's stick to inner_text for cleaner matching first.
+            text_content = page.locator("body").inner_text()
             
-            # 4. Regex - Simplified to find High on Fire specifically
-            # Matches: "Jan 23, 2026" ... "High on Fire"
-            pattern = r"([a-zA-Z]{3}\s+\d{1,2},\s+202\d).*?High\s+on\s+Fire"
+            # --- THE NUCLEAR REGEX ---
+            # 1. Finds a date: "Jan 23, 2026"
+            # 2. Uses (?s) to allow . to match newlines
+            # 3. Uses {0,500} to look ahead up to 500 characters for the band name
+            pattern = r"(?i)([a-z]{3}\s+\d{1,2},\s+202\d)(?s:.*?)(High\s+on\s+Fire)"
             
-            for m in re.finditer(pattern, content, re.IGNORECASE):
+            for m in re.finditer(pattern, text_content):
                 try:
                     date_str = m.group(1).strip()
+                    # Convert "Jan 23, 2026" to date object
                     clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
+                    
+                    print(f"[!] Match found: {date_str} -> High on Fire")
                     
                     events.append({
                         "tm_id": f"529-{clean_date}-hof",
@@ -61,16 +67,17 @@ def fetch_529():
                         "venue_name": "529",
                         "ticket_url": "https://529atlanta.com/calendar/"
                     })
-                except: continue
+                except Exception as e:
+                    print(f"[!] Regex processing error: {e}")
             
             browser.close()
     except Exception as e: 
-        print(f"[!] 529 Error: {e}")
+        print(f"[!] Scraper crashed: {e}")
     return events
 
 def sync_to_db(data):
     if not data: 
-        print("[!] No High on Fire dates found.")
+        print("[!] No High on Fire dates captured in the list.")
         return
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -82,7 +89,7 @@ def sync_to_db(data):
             new_count += 1
     db.commit()
     db.close()
-    print(f"[+] Sync Complete. Added {new_count} High on Fire shows.")
+    print(f"[+] SUCCESS! Added {new_count} High on Fire shows to the database.")
 
 if __name__ == "__main__":
     time.sleep(5)
