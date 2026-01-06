@@ -33,17 +33,17 @@ def read_root():
     db = SessionLocal()
     today = date.today()
     try:
-        # Pull everything, but we will filter in the loop
         raw_events = db.query(Event).order_by(Event.date_time).all()
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         for e in raw_events:
-            # Final safety check: ignore past shows
             if e.date_time < today:
                 continue
-                
+            
+            # Standardize venue name for display/grouping
             v_norm = e.venue_name
             if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
+            
             key = (e.date_time, v_norm)
             grouped_events[key]["artists"].add(e.name)
             grouped_events[key]["link"] = e.ticket_url
@@ -54,16 +54,8 @@ def read_root():
             data = grouped_events[(event_date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            metal_keywords = [
-                "high on fire", "ritual arcana", "nunslaughter", "atoll", 
-                "deceased", "vio-lence", "primeval well", "fatal attraction", 
-                "pissed jeans", "god bullies", "anti-sapien", "kado dupré"
-            ]
-            is_metal = any(kw in full_lineup.lower() for kw in metal_keywords)
-            highlight = "background-color: #fff9c4;" if is_metal else ""
-            
             rows += f"""
-            <tr style="{highlight}">
+            <tr>
                 <td>{event_date.strftime('%a, %b %d')}</td>
                 <td><strong>{full_lineup}</strong></td>
                 <td>{venue}</td>
@@ -91,7 +83,7 @@ def read_root():
             <body>
                 <div class="container">
                     <h1>🤘 ATL Show Finder</h1>
-                    <div class="subtitle">Upcoming Calendar: Boggs, Earl, 529 & Ticketmaster</div>
+                    <div class="subtitle">Upcoming Live Music Calendar</div>
                     <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands or venues...">
                     <table id="eventTable">
                         <thead>
