@@ -27,12 +27,14 @@ V529 = "529"
 
 VERIFIED_DATA = {
     V529: [
+        {"date": "2026-01-03", "name": "Edwin & My Folks (w/ Rahbi, Hannah)"},
+        {"date": "2026-01-04", "name": "Fatal Attraction (Metal Night)"},
         {"date": "2026-01-08", "name": "Downbeats & Distortions (Lovehex, Nitsirt)"},
-        {"date": "2026-01-09", "name": "The Taj Motel Trio (Analog Day Dream, Stepmoms)"},
-        {"date": "2026-01-10", "name": "Nick Nasty (Close To Midnight, Heroes For Ghosts)"},
+        {"date": "2026-01-09", "name": "The Taj Motel Trio (Analog Day Dream)"},
+        {"date": "2026-01-10", "name": "Nick Nasty (Close To Midnight)"},
         {"date": "2026-01-14", "name": "The Cosmic Mic (Open Mic)"},
         {"date": "2026-01-15", "name": "Elysium / After All This / Winder"},
-        {"date": "2026-01-16", "name": "Phamily & Friends Tour (Unfaced Ree, Veda Janee)"},
+        {"date": "2026-01-16", "name": "Phamily & Friends Tour"},
         {"date": "2026-01-17", "name": "Kado Dupré (Chris Harry, Mattie B)"},
         {"date": "2026-01-18", "name": "The Warsaw Clinic (Dirty Holly, Grudgestep)"},
         {"date": "2026-01-19", "name": "Anti-Sapien (Borzoi, Feel Visit, Sewage Bath)"},
@@ -45,14 +47,37 @@ VERIFIED_DATA = {
         {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
     ],
     EARL: [
+        {"date": "2026-01-09", "name": "Numbers Station Records Showcase"},
+        {"date": "2026-01-10", "name": "Gringo Star (The Sporrs, Lowtown)"},
+        {"date": "2026-01-11", "name": "The Last Revel (Wilson Springs Hotel Duo)"},
+        {"date": "2026-01-15", "name": "Rod Hamdallah (Chester Lethers)"},
+        {"date": "2026-01-16", "name": "Pissed Jeans (Morgan Garrett, Chaos OK)"},
+        {"date": "2026-01-17", "name": "Country Westerns (Ultra Lights)"},
+        {"date": "2026-01-19", "name": "Modern Nature (Brigid Dawson)"},
+        {"date": "2026-01-20", "name": "Friendship (Little Mazarn)"},
+        {"date": "2026-01-21", "name": "Shiner (Dropsonic, Bursting)"},
+        {"date": "2026-01-22", "name": "Off With Their Heads"},
+        {"date": "2026-01-23", "name": "Sean Rowe"},
         {"date": "2026-01-24", "name": "Vio-lence / Deceased / Nunslaughter"},
+        {"date": "2026-01-25", "name": "Low Water Bridge Band"},
+        {"date": "2026-01-30", "name": "God Bullies (Vincas, Rubber Udder)"},
+        {"date": "2026-01-31", "name": "K Michelle Dubois (Gouwzee)"},
         {"date": "2026-02-06", "name": "Matt Pryor (The Get Up Kids)"}
     ],
     BOGGS: [
+        {"date": "2026-01-07", "name": "Karaoke Night w/ Music Mike"},
         {"date": "2026-01-09", "name": "Ozello / Kyle Lewis / Yankee Roses"},
         {"date": "2026-01-10", "name": "Elijah Cruise / MENU / Dogwood"},
+        {"date": "2026-01-13", "name": "Socially Awkward Comedy (Open Mic)"},
+        {"date": "2026-01-14", "name": "Karaoke Night w/ Music Mike"},
+        {"date": "2026-01-16", "name": "SPUTNIK! Dark Alternative Music Video Night"},
         {"date": "2026-01-17", "name": "The Carolyn / Knives / Wes Hoffman"},
-        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm"},
+        {"date": "2026-01-21", "name": "Karaoke Night w/ Music Mike"},
+        {"date": "2026-01-22", "name": "Barreracuda Presents: House of Flops"},
+        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm / Outfield Clovers"},
+        {"date": "2026-01-24", "name": "Harnessed: January Edition (Queer Nightlife)"},
+        {"date": "2026-01-25", "name": "SUPER SMASH BREWS! Melee Tournament"},
+        {"date": "2026-01-28", "name": "Karaoke Night w/ Music Mike"},
         {"date": "2026-01-31", "name": "Palaces / Muelas / Leafblower"},
         {"date": "2026-02-05", "name": "Ritual Arcana (Wino, SharLee LuckyFree)"},
         {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill / Squelching"},
@@ -86,7 +111,7 @@ def clean_and_sync():
         
         # Add Ticketmaster (skipping manual venue overlaps)
         for e in tm_list:
-            if any(v.lower() in e['venue'].lower() for v in ["Boggs", "The Earl", "529"]):
+            if any(v.lower() in e['venue'].lower() for v in ["boggs", "the earl", "529"]):
                 continue
             db.add(Event(
                 tm_id=e['id'],
@@ -100,6 +125,7 @@ def clean_and_sync():
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
+            if venue == EARL: link = "https://badearl.freshtix.com/"
             
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()

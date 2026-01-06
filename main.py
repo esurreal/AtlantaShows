@@ -47,8 +47,12 @@ def read_root():
             data = grouped_events[(date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Heavy/Metal keywords for yellow highlighting
-            metal_keywords = ["high on fire", "ritual arcana", "nunslaughter", "atoll", "deceased", "vio-lence", "primeval well", "fatal attraction", "kado dupré"]
+            # Expanded Metal/Heavy highlighting
+            metal_keywords = [
+                "high on fire", "ritual arcana", "nunslaughter", "atoll", 
+                "deceased", "vio-lence", "primeval well", "fatal attraction", 
+                "pissed jeans", "god bullies", "anti-sapien", "kado dupré"
+            ]
             is_metal = any(kw in full_lineup.lower() for kw in metal_keywords)
             highlight = "background-color: #fff9c4;" if is_metal else ""
             
