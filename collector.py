@@ -58,11 +58,18 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
     
     try:
         with sync_playwright() as p:
-            # Check if the browser actually exists
+            # Arguments optimized for cloud/Railway environments
             try:
-                browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox', 
+                        '--disable-dev-shm-usage'
+                    ]
+                )
             except Exception as e:
-                print(f"[!] Browser launch failed: {e}. Check if 'playwright install' ran.")
+                print(f"[!] Browser launch failed: {e}")
                 return []
 
             context = browser.new_context(
@@ -71,17 +78,48 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
             page = context.new_page()
             url = f"https://www.bandsintown.com/v/{venue_id}"
             
-            page.goto(url, wait_until="networkidle", timeout=60000)
-            
-            # ... (rest of your scraping logic) ...
-            
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            time.sleep(2) 
+
+            scripts = page.locator('script[type="application/ld+json"]').all()
+            for script in scripts:
+                content = script.evaluate("node => node.textContent").strip()
+                if not content: continue
+                
+                try:
+                    data = json.loads(content)
+                    items = []
+                    if isinstance(data, list): items = data
+                    elif isinstance(data, dict): items = data.get('@graph', [data])
+
+                    for item in items:
+                        if isinstance(item, dict) and 'startDate' in item:
+                            raw_name = item.get('name', '')
+                            date_str = item.get('startDate', '').split('T')[0]
+                            event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                            
+                            clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
+                            
+                            if venue_display_name.lower() in clean_name.lower() and len(clean_name) < 20:
+                                continue
+
+                            venue_events.append({
+                                "tm_id": f"bit-{venue_id}-{date_str}-{clean_name[:5].lower()}",
+                                "name": clean_name,
+                                "date_time": event_date,
+                                "venue_name": venue_display_name,
+                                "ticket_url": item.get('url', url)
+                            })
+                except: continue
+
+            print(f"[+] {venue_display_name}: Found {len(venue_events)} events.")
             browser.close()
     except Exception as e:
-        print(f"[!] General Playwright error for {venue_display_name}: {e}")
+        print(f"[!] {venue_display_name} Error: {e}")
         
     return venue_events
 
-# --- 4. Sync & Run ---
+# --- 4. Sync ---
 def sync_to_db(combined_list):
     if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
@@ -99,6 +137,9 @@ def sync_to_db(combined_list):
         db.commit()
         db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
+    except Exception as e:
+        print(f"[!] DB Error: {e}")
+        db.rollback()
     finally:
         db.close()
     return new_count
@@ -116,7 +157,7 @@ if __name__ == "__main__":
 
     for v in small_venues:
         all_shows.extend(fetch_bandsintown_venue(v['id'], v['name']))
-        time.sleep(2)
+        time.sleep(3)
 
     total = sync_to_db(all_shows)
     print(f"--- Finished. Added {total} new shows. ---")
