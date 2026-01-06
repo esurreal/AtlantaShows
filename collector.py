@@ -1,7 +1,5 @@
 import os
 import time
-import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,80 +19,74 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-# Keep manual data for venues that don't use Freshtix (like 529)
-VERIFIED_529_DATA = [
-    {"date": "2026-01-23", "name": "High On Fire (w/ Hot Ram, Cheap Cigar)"},
-    {"date": "2026-01-24", "name": "High On Fire (w/ Apostle, Big Oaf)"},
-    {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire, Rosa Asphyxia)"},
-    {"date": "2026-01-30", "name": "Joshua Quimby (Solo)"},
-    {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
-]
-
-def scrape_freshtix():
-    print("[*] Scraping Freshtix for Atlanta events...")
-    events = []
-    # Scraping the first 3 pages to capture Jan/Feb/March
-    for page in range(1, 4):
-        url = f"https://www.freshtix.com/events/state/GA/city/Atlanta?events_page={page}"
-        try:
-            response = requests.get(url, timeout=10)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Freshtix lists events in table rows or specific cards
-            for event_card in soup.select('.event-card, tr'):
-                name_el = event_card.select_one('.event-title, a[href*="/events/"]')
-                venue_el = event_card.select_one('.venue-name, td:nth-child(2)')
-                date_el = event_card.select_one('.event-date, td:nth-child(7)')
-                
-                if name_el and venue_el and date_el:
-                    name = name_el.text.strip()
-                    venue = venue_el.text.strip()
-                    date_str = date_el.text.strip()
-                    link = "https://www.freshtix.com" + name_el['href'] if name_el.has_attr('href') else "https://www.freshtix.com"
-                    
-                    try:
-                        # Parsing "Sat, January 24, 2026"
-                        clean_date = datetime.strptime(date_str.split('-')[0].strip(), "%a, %B %d, %Y").date()
-                        events.append({
-                            "id": f"ftix-{clean_date}-{name[:10].lower().replace(' ', '')}",
-                            "name": name,
-                            "venue": venue,
-                            "date": clean_date,
-                            "url": link
-                        })
-                    except Exception:
-                        continue
-        except Exception as e:
-            print(f"Error on page {page}: {e}")
-    return events
+# CONSOLIDATED VERIFIED DATA
+VERIFIED_DATA = {
+    "529": [
+        {"date": "2026-01-18", "name": "The Warsaw Clinic (Dirty Holly, Grudgestep)"},
+        {"date": "2026-01-19", "name": "Anti-Sapien (Borzoi, Feel Visit, Sewage Bath)"},
+        {"date": "2026-01-20", "name": "ENMY (Softspoken, Summer Hoop)"},
+        {"date": "2026-01-22", "name": "SUMPP (Local Support)"},
+        {"date": "2026-01-23", "name": "High On Fire (w/ Hot Ram, Cheap Cigar)"},
+        {"date": "2026-01-24", "name": "High On Fire (w/ Apostle, Big Oaf)"},
+        {"date": "2026-01-29", "name": "Graveyard Hours (w/ Triangle Fire, Rosa Asphyxia)"},
+        {"date": "2026-01-30", "name": "Joshua Quimby (Solo)"},
+        {"date": "2026-01-31", "name": "Too Hot For Leather (Yevara, Vices of Vanity)"}
+    ],
+    "The EARL": [
+        {"date": "2026-01-15", "name": "Rod Hamdallah w/ Chester Lethers"},
+        {"date": "2026-01-16", "name": "Pissed Jeans"},
+        {"date": "2026-01-17", "name": "Country Westerns + Ultra Lights"},
+        {"date": "2026-01-19", "name": "Modern Nature"},
+        {"date": "2026-01-20", "name": "Friendship"},
+        {"date": "2026-01-22", "name": "Off With Their Heads"},
+        {"date": "2026-01-23", "name": "Sean Rowe"},
+        {"date": "2026-01-24", "name": "Nunslaughter / Vio-lence / Deceased"},
+        {"date": "2026-01-31", "name": "K Michelle Dubois"},
+        {"date": "2026-02-05", "name": "Taper's Choice"},
+        {"date": "2026-02-06", "name": "Matt Pryor (The Get Up Kids)"}
+    ],
+    "Boggs Social": [
+        {"date": "2026-01-09", "name": "Ozello / Kyle Lewis / Yankee Roses"},
+        {"date": "2026-01-10", "name": "Elijah Cruise / MENU / Dogwood"},
+        {"date": "2026-01-17", "name": "The Carolyn / Knives / Wes Hoffman"},
+        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm / The Outfield Clovers"},
+        {"date": "2026-01-31", "name": "Palaces / Muelas / Leafblower"},
+        {"date": "2026-02-05", "name": "Ritual Arcana (Wino, SharLee LuckyFree)"},
+        {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill / Squelching"},
+        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal / Drugula"}
+    ]
+}
 
 def clean_and_sync():
+    print("[*] Rebuilding schedule with manual verified data...")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        # 1. Scrape dynamic data
-        freshtix_events = scrape_freshtix()
-        
-        # 2. Clear old data (Optional: you can filter by venue if you want to keep Ticketmaster data)
+        # Clear existing data to ensure no duplicates
         db.query(Event).delete()
         
-        # 3. Add Freshtix data
-        for e in freshtix_events:
-            db.add(Event(tm_id=e['id'], name=e['name'], date_time=e['date'], venue_name=e['venue'], ticket_url=e['url']))
+        for venue, shows in VERIFIED_DATA.items():
+            # Setup ticket links
+            links = {
+                "Boggs Social": "https://www.freshtix.com/organizations/boggs-social--supply",
+                "529": "https://529atlanta.com/calendar/",
+                "The EARL": "https://badearl.freshtix.com/"
+            }
             
-        # 4. Add Manual 529 data
-        for item in VERIFIED_529_DATA:
-            dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
-            db.add(Event(
-                tm_id=f"man-529-{item['date']}",
-                name=item['name'],
-                date_time=dt,
-                venue_name="529",
-                ticket_url="https://529atlanta.com/calendar/"
-            ))
-            
+            for item in shows:
+                dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
+                # Create a clean ID: date + first 5 of venue + first 5 of name
+                unique_id = f"{item['date']}-{venue[:5].lower()}-{item['name'][:5].lower()}"
+                
+                db.add(Event(
+                    tm_id=unique_id,
+                    name=item['name'],
+                    date_time=dt,
+                    venue_name=venue,
+                    ticket_url=links.get(venue, "")
+                ))
         db.commit()
-        print(f"[+] Sync complete. Added {len(freshtix_events)} Freshtix events and 529 manual dates.")
+        print("[+] All venues synced.")
     except Exception as e:
         print(f"Sync error: {e}")
     finally:

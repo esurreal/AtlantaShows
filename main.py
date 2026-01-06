@@ -25,7 +25,6 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
-    # Run the collector once on startup
     subprocess.Popen(["python", "collector.py"])
 
 @app.get("/", response_class=HTMLResponse)
@@ -34,7 +33,7 @@ def read_root():
     try:
         raw_events = db.query(Event).order_by(Event.date_time).all()
         
-        # Deduplication logic remains the same
+        # Group by date and venue
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         for e in raw_events:
             key = (e.date_time, e.venue_name)
@@ -46,11 +45,15 @@ def read_root():
         for date, venue in sorted_keys:
             data = grouped_events[(date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
-            highlight = "background-color: #fff9c4;" if "High on Fire" in full_lineup else ""
+            
+            # Highlight metal shows (High on Fire, Ritual Arcana, Nunslaughter)
+            metal_bands = ["High On Fire", "Ritual Arcana", "Nunslaughter", "Atoll"]
+            is_metal = any(band in full_lineup for band in metal_bands)
+            highlight = "background-color: #fff9c4;" if is_metal else ""
             
             rows += f"""
             <tr style="{highlight}">
-                <td>{date}</td>
+                <td>{date.strftime('%a, %b %d')}</td>
                 <td><strong>{full_lineup}</strong></td>
                 <td>{venue}</td>
                 <td><a href="{data['link']}" target="_blank">Tickets</a></td>
@@ -63,18 +66,22 @@ def read_root():
                 <title>ATL Show Finder</title>
                 <style>
                     body {{ font-family: -apple-system, sans-serif; margin: 0; background: #f0f2f5; }}
-                    .container {{ max-width: 1000px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
-                    h1 {{ color: #1a1a1a; border-bottom: 3px solid #ffcc00; display: inline-block; }}
-                    input {{ width: 100%; padding: 15px; margin: 20px 0; border: 2px solid #eee; border-radius: 8px; font-size: 16px; }}
+                    .container {{ max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
+                    h1 {{ color: #1a1a1a; margin-bottom: 5px; }}
+                    .subtitle {{ color: #666; margin-bottom: 25px; }}
+                    input {{ width: 100%; padding: 15px; margin-bottom: 20px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; box-sizing: border-box; }}
                     table {{ width: 100%; border-collapse: collapse; }}
                     th {{ background: #1a1a1a; color: white; padding: 12px; text-align: left; }}
                     td {{ padding: 12px; border-bottom: 1px solid #eee; color: #444; }}
+                    tr:hover {{ background-color: #f8f9fa; }}
+                    a {{ color: #007bff; text-decoration: none; font-weight: bold; }}
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>🤘 Atlanta Live Music</h1>
-                    <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands or venues...">
+                    <h1>🤘 ATL Show Finder</h1>
+                    <div class="subtitle">Manual & Freshtix Feed (529, Earl, Boggs)</div>
+                    <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands, venues, or dates...">
                     <table id="eventTable">
                         <thead>
                             <tr><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr>
