@@ -31,26 +31,33 @@ def fetch_529_direct():
     
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            # We set a real User-Agent manually to avoid being blocked
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
-            page.goto("https://529atlanta.com/calendar/", wait_until="networkidle", timeout=60000)
             
-            content = page.locator(".entry-content").inner_text()
+            # Use 'domcontentloaded' instead of 'networkidle' to prevent timeout
+            page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=45000)
             
-            # Pattern: Day Jan 23, 2026. Artist
-            pattern = r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+([a-zA-Z]{3}\s+\d{1,2},\s+202\d)\.\s+(.*?)(?=\s+Tickets|\s+Info|\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)|$)"
+            # Hard sleep to ensure the calendar data is rendered
+            time.sleep(5)
             
-            matches = re.finditer(pattern, content, re.DOTALL)
+            # Target the specific container for the calendar list
+            content = page.locator("body").inner_text()
+            
+            # Refined Regex for 529's text format
+            pattern = r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([a-zA-Z]{3}\s+\d{1,2},\s+202\d)\s+–\s+(.*?)(?=\s+Tickets|\s+Info|$)"
+            
+            matches = re.finditer(pattern, content, re.IGNORECASE)
             for m in matches:
                 try:
-                    date_str = m.group(1).strip()
+                    date_str = m.group(1).strip() # "Jan 23, 2026"
                     artist_raw = m.group(2).strip()
+                    
+                    # Basic cleaning
+                    artist = re.sub(r'^(Night \d\.\s+|529 Presents:\s+|w\/\s+)', '', artist_raw, flags=re.I).strip()
                     clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
-                    artist = re.sub(r'^(Night \d\.\s+|w\/\s+)', '', artist_raw, flags=re.I).strip()
                     
                     if artist and len(artist) > 2:
                         events.append({
@@ -61,8 +68,11 @@ def fetch_529_direct():
                             "ticket_url": "https://529atlanta.com/calendar/"
                         })
                 except: continue
+            
             browser.close()
-    except Exception as e: print(f"[!] 529 Error: {e}")
+            print(f"[+] 529: Found {len(events)} events.")
+    except Exception as e: 
+        print(f"[!] 529 Error: {e}")
     return events
 
 # --- 3. Boggs Social Direct Scraper ---
@@ -74,9 +84,9 @@ def fetch_boggs_direct():
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             page = context.new_page()
-            page.goto("https://www.boggssocial.com/events", wait_until="networkidle", timeout=60000)
+            page.goto("https://www.boggssocial.com/events", wait_until="domcontentloaded", timeout=45000)
             
-            # Targeted selector for Squarespace events
+            time.sleep(3)
             elements = page.locator("article.eventlist-event").all()
             for el in elements:
                 try:
@@ -93,24 +103,22 @@ def fetch_boggs_direct():
                     })
                 except: continue
             browser.close()
+            print(f"[+] Boggs: Found {len(events)} events.")
     except Exception as e: print(f"[!] Boggs Error: {e}")
     return events
 
-# --- 4. Bandsintown (For The Earl & others) ---
-def fetch_bandsintown_venue(venue_id, venue_display_name):
-    venue_events = []
-    print(f"[*] Scraping {venue_display_name} via BIT...")
+# --- 4. Bandsintown (The Earl) ---
+def fetch_earl_bit():
+    print("[*] Scraping The Earl via BIT...")
+    events = []
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             context = browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
             page = context.new_page()
-            page.goto(f"https://www.bandsintown.com/v/{venue_id}", wait_until="domcontentloaded", timeout=60000)
+            page.goto("https://www.bandsintown.com/v/10001781", wait_until="domcontentloaded", timeout=45000)
             
-            # Simple scroll
-            page.mouse.wheel(0, 1500)
-            time.sleep(2)
-
+            time.sleep(3)
             scripts = page.locator('script[type="application/ld+json"]').all()
             for script in scripts:
                 try:
@@ -120,17 +128,18 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
                         if isinstance(item, dict) and 'startDate' in item:
                             name = item.get('name', '').split('@')[0].strip()
                             date_str = item.get('startDate', '').split('T')[0]
-                            venue_events.append({
-                                "tm_id": f"bit-{venue_id}-{date_str}-{name[:5].lower()}",
+                            events.append({
+                                "tm_id": f"bit-earl-{date_str}-{name[:5].lower()}",
                                 "name": name,
                                 "date_time": datetime.strptime(date_str, "%Y-%m-%d").date(),
-                                "venue_name": venue_display_name,
+                                "venue_name": "The Earl",
                                 "ticket_url": item.get('url', '').split('?')[0]
                             })
                 except: continue
             browser.close()
+            print(f"[+] The Earl: Found {len(events)} events.")
     except: pass
-    return venue_events
+    return events
 
 # --- 5. Sync ---
 def sync_to_db(combined_list):
@@ -149,7 +158,9 @@ def sync_to_db(combined_list):
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
-    except: db.rollback()
+    except Exception as e:
+        print(f"[!] DB Error: {e}")
+        db.rollback()
     finally: db.close()
     return new_count
 
@@ -157,29 +168,10 @@ if __name__ == "__main__":
     print("--- Collection Started ---")
     all_shows = []
     
-    # 1. Ticketmaster API
-    tm_api_key = os.getenv("TM_API_KEY")
-    if tm_api_key:
-        try:
-            url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={tm_api_key}&city=Atlanta&classificationName=music&size=100"
-            r = requests.get(url, timeout=10)
-            for item in r.json().get('_embedded', {}).get('events', []):
-                all_shows.append({
-                    "tm_id": str(item['id']),
-                    "name": item['name'],
-                    "date_time": datetime.strptime(item['dates']['start']['localDate'], '%Y-%m-%d').date(),
-                    "venue_name": item['_embedded']['venues'][0]['name'],
-                    "ticket_url": item['url']
-                })
-        except: print("[!] TM API failed.")
-
-    # 2. Direct Scrapers
+    # Run the scrapers
     all_shows.extend(fetch_529_direct())
     all_shows.extend(fetch_boggs_direct())
-    
-    # 3. BIT Scrapers
-    all_shows.extend(fetch_bandsintown_venue("10001781", "The Earl"))
-    all_shows.extend(fetch_bandsintown_venue("10001815", "The Drunken Unicorn"))
+    all_shows.extend(fetch_earl_bit())
 
     added = sync_to_db(all_shows)
     print(f"--- Finished. Added {added} new shows. ---")
