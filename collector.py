@@ -30,41 +30,39 @@ def fetch_529():
             context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             page = context.new_page()
             
-            # Use a longer timeout and wait for DOM rather than network idle
+            # 1. Navigate
             page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=90000)
             
-            # Wait for any of the common content containers to appear
+            # 2. WAIT for the dynamic content. 
+            # We look for "High on Fire" specifically since we know they are playing.
+            print("[*] Waiting for calendar content to render...")
             try:
-                page.wait_for_selector("article, .entry-content, #main", timeout=20000)
+                page.wait_for_selector("text=High on Fire", timeout=30000)
+                print("[+] Found High on Fire on page!")
             except:
-                print("[!] Specific content container not found, trying body text...")
+                print("[!] Timed out waiting for 'High on Fire' text. Scraping anyway...")
 
-            # Pull the inner text from the whole body as a fallback
+            # 3. Get Content
             content = page.locator("body").inner_text()
             
-            # DEBUG: Print first 100 chars of found text to logs
-            print(f"[Debug] Found text snippet: {content[:150].replace('\n', ' ')}")
-
-            # Pattern for: "Friday Jan 23, 2026" or "Jan 23, 2026"
-            # It looks for the date, then any character, then the band name
-            pattern = r"([a-zA-Z]{3}\s+\d{1,2},\s+202\d).*?([\-\–\—\.\:\s])\s*(.*?)(?=\n|Tickets|Info|$)"
+            # 4. Regex - Simplified to find High on Fire specifically
+            # Matches: "Jan 23, 2026" ... "High on Fire"
+            pattern = r"([a-zA-Z]{3}\s+\d{1,2},\s+202\d).*?High\s+on\s+Fire"
             
             for m in re.finditer(pattern, content, re.IGNORECASE):
                 try:
                     date_str = m.group(1).strip()
-                    artist_raw = m.group(3).strip()
+                    clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
                     
-                    # Target High on Fire specifically
-                    if "high on fire" in artist_raw.lower():
-                        clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
-                        events.append({
-                            "tm_id": f"529-{clean_date}-hof",
-                            "name": "High On Fire",
-                            "date_time": clean_date,
-                            "venue_name": "529",
-                            "ticket_url": "https://529atlanta.com/calendar/"
-                        })
+                    events.append({
+                        "tm_id": f"529-{clean_date}-hof",
+                        "name": "High On Fire",
+                        "date_time": clean_date,
+                        "venue_name": "529",
+                        "ticket_url": "https://529atlanta.com/calendar/"
+                    })
                 except: continue
+            
             browser.close()
     except Exception as e: 
         print(f"[!] 529 Error: {e}")
@@ -72,7 +70,7 @@ def fetch_529():
 
 def sync_to_db(data):
     if not data: 
-        print("[!] No events found to sync.")
+        print("[!] No High on Fire dates found.")
         return
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -84,10 +82,9 @@ def sync_to_db(data):
             new_count += 1
     db.commit()
     db.close()
-    print(f"[+] Sync Complete. Added {new_count} new events.")
+    print(f"[+] Sync Complete. Added {new_count} High on Fire shows.")
 
 if __name__ == "__main__":
-    # Wait for web server
-    time.sleep(8)
+    time.sleep(5)
     all_data = fetch_529()
     sync_to_db(all_data)
