@@ -56,20 +56,21 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
     venue_events = []
     print(f"[*] Scraping {venue_display_name} via Playwright...")
     
-    # Force Playwright to look at the custom path we defined in the build log
-    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.getenv("PLAYWRIGHT_BROWSERS_PATH", "/app/pw-browsers")
+    # Crucial: Tell Playwright where the browsers were downloaded in the build phase
+    # This matches the /app/pw-browsers path from your build log
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/pw-browsers"
 
     try:
         with sync_playwright() as p:
             try:
-                # We use chromium.launch but it will automatically find the 
-                # 'chromium_headless_shell' downloaded in your build log
+                # Railway requires these specific flags to run Chromium in a container
                 browser = p.chromium.launch(
                     headless=True,
                     args=[
                         '--no-sandbox', 
                         '--disable-setuid-sandbox', 
-                        '--disable-dev-shm-usage'
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu'
                     ]
                 )
             except Exception as e:
@@ -82,9 +83,11 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
             page = context.new_page()
             url = f"https://www.bandsintown.com/v/{venue_id}"
             
+            # Wait for content to load
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
             time.sleep(2) 
 
+            # Extract event data from the application/ld+json script tags
             scripts = page.locator('script[type="application/ld+json"]').all()
             for script in scripts:
                 content = script.evaluate("node => node.textContent").strip()
@@ -102,8 +105,10 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
                             date_str = item.get('startDate', '').split('T')[0]
                             event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                             
+                            # Clean up name (remove "at The Earl" etc.)
                             clean_name = re.sub(r'(\s*@\s*.*|\s+at\s+.*)', '', raw_name, flags=re.I).strip()
                             
+                            # Filter out events that are just venue announcements
                             if venue_display_name.lower() in clean_name.lower() and len(clean_name) < 20:
                                 continue
 
@@ -123,7 +128,7 @@ def fetch_bandsintown_venue(venue_id, venue_display_name):
         
     return venue_events
 
-# --- 4. Sync ---
+# --- 4. Database Sync ---
 def sync_to_db(combined_list):
     if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
@@ -131,6 +136,7 @@ def sync_to_db(combined_list):
     new_count = 0
     try:
         for event_data in combined_list:
+            # Avoid duplicates based on date and venue
             existing = db.query(Event).filter(
                 and_(Event.date_time == event_data['date_time'], 
                      Event.venue_name == event_data['venue_name'])
@@ -139,6 +145,7 @@ def sync_to_db(combined_list):
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
+        # Clean up old events
         db.query(Event).filter(Event.date_time < datetime.now().date()).delete()
         db.commit()
     except Exception as e:
@@ -161,7 +168,7 @@ if __name__ == "__main__":
 
     for v in small_venues:
         all_shows.extend(fetch_bandsintown_venue(v['id'], v['name']))
-        time.sleep(3)
+        time.sleep(3) # Respectful scraping delay
 
     total = sync_to_db(all_shows)
     print(f"--- Finished. Added {total} new shows. ---")
