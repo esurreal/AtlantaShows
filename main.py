@@ -1,6 +1,7 @@
 import os
 import subprocess
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -24,26 +25,53 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
-    # Trigger the collector on startup
+    # Runs the collector in the background
     subprocess.Popen(["python", "collector.py"])
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def read_root():
     db = SessionLocal()
     try:
-        # Fetch all shows from the database
         events = db.query(Event).order_by(Event.date_time).all()
-        return {
-            "status": "Online",
-            "total_events": len(events),
-            "events": [
-                {
-                    "date": str(e.date_time),
-                    "artist": e.name,
-                    "venue": e.venue_name,
-                    "link": e.ticket_url
-                } for e in events
-            ]
-        }
+        
+        # Build a simple HTML table
+        rows = ""
+        for e in events:
+            # Highlight High on Fire rows in yellow
+            bg_color = "#fff9c4" if "High on Fire" in e.name else "white"
+            rows += f"""
+            <tr style="background-color: {bg_color}; border-bottom: 1px solid #ddd;">
+                <td style="padding: 10px;">{e.date_time}</td>
+                <td style="padding: 10px;"><strong>{e.name}</strong></td>
+                <td style="padding: 10px;">{e.venue_name}</td>
+                <td style="padding: 10px;"><a href="{e.ticket_url}" target="_blank">Tickets</a></td>
+            </tr>
+            """
+
+        return f"""
+        <html>
+            <head>
+                <title>Atlanta Show Finder</title>
+                <style>
+                    body {{ font-family: sans-serif; margin: 40px; line-height: 1.6; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                    th {{ text-align: left; background: #333; color: white; padding: 10px; }}
+                </style>
+            </head>
+            <body>
+                <h1>🤘 Atlanta Show Calendar</h1>
+                <p>Found {len(events)} upcoming events.</p>
+                <table>
+                    <tr>
+                        <th>Date</th>
+                        <th>Artist</th>
+                        <th>Venue</th>
+                        <th>Link</th>
+                    </tr>
+                    {rows}
+                </table>
+            </body>
+        </html>
+        """
     finally:
         db.close()

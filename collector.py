@@ -28,14 +28,15 @@ VERIFIED_529_DATA = [
 ]
 
 def sync_verified_data():
-    print("[*] Syncing verified data from screenshot...")
+    print("[*] Syncing verified screenshot data...")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     added = 0
     try:
         for item in VERIFIED_529_DATA:
             dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
-            unique_id = f"529-{item['date']}-manual"
+            # Use a 'verified' prefix to distinguish these from scraped items
+            unique_id = f"verified-529-{item['date']}"
             
             existing = db.query(Event).filter_by(tm_id=unique_id).first()
             if not existing:
@@ -48,10 +49,9 @@ def sync_verified_data():
                 ))
                 added += 1
         db.commit()
-        print(f"[+] Added {added} new verified shows.")
+        print(f"[+] Sync complete. Added {added} verified shows.")
     finally:
         db.close()
 
 if __name__ == "__main__":
-    # In a real scenario, you'd add your Boggs/Earl scrapers here too
     sync_verified_data()
