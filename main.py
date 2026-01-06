@@ -53,7 +53,6 @@ def read_root():
             data = grouped_events[(event_date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
-            # Month is 0-indexed in JS, so we store it carefully
             rows += f"""
             <tr class="event-row" 
                 data-date="{event_date.isoformat()}" 
@@ -132,7 +131,7 @@ def read_root():
 
                 <script>
                     let currentFilter = 'all';
-                    let viewingDate = new Date(); // Start with today
+                    let viewingDate = new Date();
                     viewingDate.setHours(0,0,0,0);
 
                     function setFilter(filter, btn) {{
@@ -165,7 +164,7 @@ def read_root():
                         const label = document.getElementById('current-view-label');
                         if (currentFilter === 'today') {{
                             label.innerText = viewingDate.toLocaleDateString('en-US', {{ month: 'short', day: 'numeric', year: 'numeric' }});
-                        } else if (currentFilter === 'month') {{
+                        }} else if (currentFilter === 'month') {{
                             label.innerText = viewingDate.toLocaleDateString('en-US', {{ month: 'long', year: 'numeric' }});
                         }}
                     }}
@@ -180,7 +179,7 @@ def read_root():
 
                         rows.forEach(row => {{
                             const rowDateStr = row.getAttribute('data-date');
-                            const rowDate = new Date(rowDateStr + 'T00:00:00'); // Prevent timezone shifts
+                            const rowDate = new Date(rowDateStr + 'T00:00:00');
                             const textMatch = row.innerText.toUpperCase().includes(searchTerm);
                             
                             let filterMatch = false;
