@@ -40,7 +40,6 @@ def read_root():
             if e.date_time < today:
                 continue
             
-            # Standardize venue name for display/grouping
             v_norm = e.venue_name
             if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
             
@@ -54,8 +53,13 @@ def read_root():
             data = grouped_events[(event_date, venue)]
             full_lineup = " / ".join(sorted(list(data["artists"])))
             
+            # Format classes for JS filtering
+            is_today = "today" if event_date == today else ""
+            month_class = f"m-{event_date.month}"
+            
+            # Store raw date for easier JS comparison
             rows += f"""
-            <tr>
+            <tr class="event-row {is_today} {month_class}" data-date="{event_date.isoformat()}">
                 <td>{event_date.strftime('%a, %b %d')}</td>
                 <td><strong>{full_lineup}</strong></td>
                 <td>{venue}</td>
@@ -71,8 +75,20 @@ def read_root():
                     body {{ font-family: -apple-system, sans-serif; margin: 0; background: #f0f2f5; }}
                     .container {{ max-width: 950px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
                     h1 {{ color: #1a1a1a; margin-bottom: 5px; }}
-                    .subtitle {{ color: #666; margin-bottom: 25px; }}
-                    input {{ width: 100%; padding: 15px; margin-bottom: 20px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; box-sizing: border-box; }}
+                    .subtitle {{ color: #666; margin-bottom: 20px; }}
+                    
+                    /* Search & Filter Styles */
+                    .controls {{ display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; }}
+                    input {{ width: 100%; padding: 15px; border: 2px solid #eee; border-radius: 8px; font-size: 16px; box-sizing: border-box; }}
+                    .button-group {{ display: flex; gap: 10px; }}
+                    .filter-btn {{ 
+                        padding: 10px 20px; border: none; border-radius: 6px; background: #eee; 
+                        color: #444; cursor: pointer; font-weight: 600; transition: all 0.2s;
+                    }}
+                    .filter-btn.active {{ background: #1a1a1a; color: white; }}
+                    .filter-btn:hover {{ background: #ddd; }}
+                    .filter-btn.active:hover {{ background: #333; }}
+
                     table {{ width: 100%; border-collapse: collapse; }}
                     th {{ background: #1a1a1a; color: white; padding: 12px; text-align: left; }}
                     td {{ padding: 12px; border-bottom: 1px solid #eee; color: #444; }}
@@ -84,7 +100,16 @@ def read_root():
                 <div class="container">
                     <h1>🤘 ATL Show Finder</h1>
                     <div class="subtitle">Upcoming Live Music Calendar</div>
-                    <input type="text" id="search" onkeyup="filterTable()" placeholder="Search bands or venues...">
+                    
+                    <div class="controls">
+                        <input type="text" id="search" onkeyup="runFilters()" placeholder="Search bands or venues...">
+                        <div class="button-group">
+                            <button class="filter-btn active" onclick="setFilter('all', this)">ALL</button>
+                            <button class="filter-btn" onclick="setFilter('month', this)">MONTHLY</button>
+                            <button class="filter-btn" onclick="setFilter('today', this)">DAILY</button>
+                        </div>
+                    </div>
+
                     <table id="eventTable">
                         <thead>
                             <tr><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr>
@@ -92,13 +117,45 @@ def read_root():
                         <tbody>{rows}</tbody>
                     </table>
                 </div>
+
                 <script>
-                    function filterTable() {{
-                        let input = document.getElementById("search").value.toUpperCase();
-                        let rows = document.getElementById("eventTable").getElementsByTagName("tr");
-                        for (let i = 1; i < rows.length; i++) {{
-                            rows[i].style.display = rows[i].innerText.toUpperCase().includes(input) ? "" : "none";
-                        }}
+                    let currentFilter = 'all';
+
+                    function setFilter(filter, btn) {{
+                        // Update button UI
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        
+                        currentFilter = filter;
+                        runFilters();
+                    }}
+
+                    function runFilters() {{
+                        const searchTerm = document.getElementById("search").value.toUpperCase();
+                        const rows = document.querySelectorAll(".event-row");
+                        const today = new Date().toISOString().split('T')[0];
+                        const currentMonth = new Date().getMonth();
+
+                        rows.forEach(row => {{
+                            const rowDateStr = row.getAttribute('data-date');
+                            const rowDate = new Date(rowDateStr);
+                            const textMatch = row.innerText.toUpperCase().includes(searchTerm);
+                            
+                            let filterMatch = false;
+                            if (currentFilter === 'all') {{
+                                filterMatch = true;
+                            }} else if (currentFilter === 'today') {{
+                                filterMatch = rowDateStr === today;
+                            }} else if (currentFilter === 'month') {{
+                                filterMatch = rowDate.getMonth() === currentMonth;
+                            }}
+
+                            if (textMatch && filterMatch) {{
+                                row.style.display = "";
+                            }} else {{
+                                row.style.display = "none";
+                            }}
+                        }});
                     }}
                 </script>
             </body>
