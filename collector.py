@@ -23,41 +23,35 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# --- 2. 529 Direct Website Scraper ---
+# --- 2. 529 Scraper (Mobile Mode) ---
 def fetch_529_direct():
-    print("[*] Scraping 529 Atlanta Official Calendar...")
+    print("[*] Scraping 529 Atlanta...")
     events = []
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/pw-browsers"
     
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+            # Using a mobile user agent often speeds up loading and bypasses heavy scripts
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1"
             )
             page = context.new_page()
+            page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=60000)
             
-            # Use 'domcontentloaded' instead of 'networkidle' to prevent timeout
-            page.goto("https://529atlanta.com/calendar/", wait_until="domcontentloaded", timeout=45000)
-            
-            # Hard sleep to ensure the calendar data is rendered
-            time.sleep(5)
-            
-            # Target the specific container for the calendar list
+            time.sleep(5) # Let the text render
             content = page.locator("body").inner_text()
             
-            # Refined Regex for 529's text format
+            # Pattern: Day, Jan 23, 2026 – Artist
             pattern = r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([a-zA-Z]{3}\s+\d{1,2},\s+202\d)\s+–\s+(.*?)(?=\s+Tickets|\s+Info|$)"
             
             matches = re.finditer(pattern, content, re.IGNORECASE)
             for m in matches:
                 try:
-                    date_str = m.group(1).strip() # "Jan 23, 2026"
+                    date_str = m.group(1).strip()
                     artist_raw = m.group(2).strip()
-                    
-                    # Basic cleaning
-                    artist = re.sub(r'^(Night \d\.\s+|529 Presents:\s+|w\/\s+)', '', artist_raw, flags=re.I).strip()
                     clean_date = datetime.strptime(date_str, "%b %d, %Y").date()
+                    artist = re.sub(r'^(Night \d\.\s+|529 Presents:\s+|w\/\s+)', '', artist_raw, flags=re.I).strip()
                     
                     if artist and len(artist) > 2:
                         events.append({
@@ -68,23 +62,21 @@ def fetch_529_direct():
                             "ticket_url": "https://529atlanta.com/calendar/"
                         })
                 except: continue
-            
             browser.close()
-            print(f"[+] 529: Found {len(events)} events.")
-    except Exception as e: 
-        print(f"[!] 529 Error: {e}")
+            print(f"[+] 529: Found {len(events)} shows.")
+    except Exception as e: print(f"[!] 529 Error: {e}")
     return events
 
-# --- 3. Boggs Social Direct Scraper ---
+# --- 3. Boggs Scraper ---
 def fetch_boggs_direct():
-    print("[*] Scraping Boggs Social Official Website...")
+    print("[*] Scraping Boggs Social...")
     events = []
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             page = context.new_page()
-            page.goto("https://www.boggssocial.com/events", wait_until="domcontentloaded", timeout=45000)
+            page.goto("https://www.boggssocial.com/events", wait_until="domcontentloaded", timeout=60000)
             
             time.sleep(3)
             elements = page.locator("article.eventlist-event").all()
@@ -92,32 +84,28 @@ def fetch_boggs_direct():
                 try:
                     title = el.locator(".eventlist-title").inner_text()
                     date_raw = el.locator("time.eventlist-meta-time").get_attribute("datetime")
-                    
-                    clean_date = datetime.strptime(date_raw, "%Y-%m-%d").date()
                     events.append({
-                        "tm_id": f"boggs-{clean_date}-{title[:10].lower().replace(' ', '')}",
+                        "tm_id": f"boggs-{date_raw}-{title[:5].lower()}",
                         "name": title.strip(),
-                        "date_time": clean_date,
+                        "date_time": datetime.strptime(date_raw, "%Y-%m-%d").date(),
                         "venue_name": "Boggs Social",
                         "ticket_url": "https://www.boggssocial.com/events"
                     })
                 except: continue
             browser.close()
-            print(f"[+] Boggs: Found {len(events)} events.")
+            print(f"[+] Boggs: Found {len(events)} shows.")
     except Exception as e: print(f"[!] Boggs Error: {e}")
     return events
 
-# --- 4. Bandsintown (The Earl) ---
+# --- 4. The Earl ---
 def fetch_earl_bit():
-    print("[*] Scraping The Earl via BIT...")
+    print("[*] Scraping The Earl...")
     events = []
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            context = browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-            page = context.new_page()
-            page.goto("https://www.bandsintown.com/v/10001781", wait_until="domcontentloaded", timeout=45000)
-            
+            page = browser.new_page()
+            page.goto("https://www.bandsintown.com/v/10001781", wait_until="domcontentloaded")
             time.sleep(3)
             scripts = page.locator('script[type="application/ld+json"]').all()
             for script in scripts:
@@ -137,11 +125,9 @@ def fetch_earl_bit():
                             })
                 except: continue
             browser.close()
-            print(f"[+] The Earl: Found {len(events)} events.")
     except: pass
     return events
 
-# --- 5. Sync ---
 def sync_to_db(combined_list):
     if not combined_list: return 0
     Base.metadata.create_all(bind=engine)
@@ -158,17 +144,16 @@ def sync_to_db(combined_list):
                 db.add(Event(**event_data))
                 new_count += 1
         db.commit()
-    except Exception as e:
-        print(f"[!] DB Error: {e}")
-        db.rollback()
+    except Exception as e: print(f"[!] DB Error: {e}")
     finally: db.close()
     return new_count
 
 if __name__ == "__main__":
-    print("--- Collection Started ---")
-    all_shows = []
+    # Give the web server 10 seconds to start before we bog down the CPU with scraping
+    print("--- Collector waiting for web server ---")
+    time.sleep(10)
     
-    # Run the scrapers
+    all_shows = []
     all_shows.extend(fetch_529_direct())
     all_shows.extend(fetch_boggs_direct())
     all_shows.extend(fetch_earl_bit())
