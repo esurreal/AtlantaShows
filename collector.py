@@ -27,31 +27,41 @@ CULT_SHOCK = "Culture Shock"
 EASTERN = "The Eastern"
 MASQ = "The Masquerade"
 
-# CURRENT VERIFIED LIST: Added The Eastern (AXS / Zero Mile)
+# FULL VERIFIED LIST: Restored Boggs + Eastern + Culture Shock
 VERIFIED_DATA = {
     V529: [
         {"date": "2026-01-23", "name": "High On Fire (Night 1)"},
-        {"date": "2026-01-24", "name": "High On Fire (Night 2)"}
+        {"date": "2026-01-24", "name": "High On Fire (Night 2)"},
+        {"date": "2026-02-14", "name": "The Coathangers"}
     ],
     EARL: [
         {"date": "2026-01-16", "name": "Pissed Jeans"},
+        {"date": "2026-01-21", "name": "Shiner"},
+        {"date": "2026-01-24", "name": "Vio-lence / Deceased"},
         {"date": "2026-03-05", "name": "Rivers of Nihil / Cynic"}
     ],
     BOGGS: [
+        {"date": "2026-01-09", "name": "ozello / Kyle Lewis / Yankee Roses"},
+        {"date": "2026-01-10", "name": "Elijah Cruise / MENU / Dogwood"},
+        {"date": "2026-01-17", "name": "The Carolyn / Knives / Wes Hoffman"},
+        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm / Outfield Clovers"},
+        {"date": "2026-01-31", "name": "Palaces / Muelas / Leafblower"},
+        {"date": "2026-02-05", "name": "Ritual Arcana (Wino)"},
+        {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill / Squelching"},
+        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal / Drugula"},
+        {"date": "2026-02-28", "name": "Doesin / Star Funeral / Widow 100s"},
         {"date": "2026-03-03", "name": "Temptress / Friendship Commanders"},
-        {"date": "2026-03-06", "name": "Author & Punisher / King Yosef"}
+        {"date": "2026-03-06", "name": "Author & Punisher / King Yosef / Black Magnet"}
     ],
     CULT_SHOCK: [
         {"date": "2026-01-18", "name": "Second Death / Cruel Bones"},
+        {"date": "2026-02-20", "name": "SinThya / Endeavor Into the Dark"},
         {"date": "2026-03-20", "name": "Bullshit Detector / Antagonizers"}
     ],
-    # NEW: The Eastern Highlights (AXS)
     EASTERN: [
-        {"date": "2026-01-29", "name": "The Wood Brothers"},
         {"date": "2026-02-27", "name": "STS9 (Night 1)"},
         {"date": "2026-02-28", "name": "STS9 (Night 2)"},
         {"date": "2026-03-07", "name": "Machine Girl / Show Me The Body"},
-        {"date": "2026-03-12", "name": "Cat Power (The Greatest 20th Anniversary)"},
         {"date": "2026-04-17", "name": "Acid Bath / Crowbar / Eyehategod"}
     ],
     MASQ: [
@@ -79,7 +89,7 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Rebuilding database with The Eastern...")
+        print("[*] Rebuilding database (Full Venue Restoration)...")
         tm_list = fetch_ticketmaster()
         db.query(Event).delete()
         
@@ -88,7 +98,6 @@ def clean_and_sync():
         for e in tm_list:
             event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if event_date < today: continue
-            # Exclude manual venues to prevent AXS/TM duplicate mess
             if any(v.lower() in e['venue'].lower() for v in ["boggs", "the earl", "529", "culture shock", "the eastern"]):
                 continue
             db.add(Event(tm_id=e['id'], name=e['name'], date_time=event_date, venue_name=e['venue'], ticket_url=e['url']))
@@ -100,19 +109,20 @@ def clean_and_sync():
             if venue == BOGGS: link = "https://www.freshtix.com/organizations/arippinproduction"
             if venue == CULT_SHOCK: link = "https://www.venuepilot.co/events/cultureshock"
             if venue == EASTERN: link = "https://www.easternatl.com/calendar/"
+            if venue == MASQ: link = "https://www.masqueradeatlanta.com/events/"
             
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
                 if dt < today: continue
                 db.add(Event(
-                    tm_id=f"man-{venue[:3].lower()}-{item['date']}-{item['name'][:5].lower()}",
+                    tm_id=f"man-{venue[:3].lower()}-{item['date']}-{item['name'][:5].lower().replace(' ', '')}",
                     name=item['name'],
                     date_time=dt,
                     venue_name=venue,
                     ticket_url=link
                 ))
         db.commit()
-        print("[+] Sync complete! The Eastern is live.")
+        print("[+] Sync complete! All venues and shows restored.")
     finally:
         db.close()
 
