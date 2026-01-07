@@ -23,41 +23,45 @@ SessionLocal = sessionmaker(bind=engine)
 BOGGS = "Boggs Social & Supply"
 EARL = "The EARL"
 V529 = "529"
+CULT_SHOCK = "Culture Shock"
+EASTERN = "The Eastern"
+MASQ = "The Masquerade"
 
-# UPDATED: Added Author & Punisher + Full Spring Schedule
+# CURRENT VERIFIED LIST: Added The Eastern (AXS / Zero Mile)
 VERIFIED_DATA = {
     V529: [
-        {"date": "2026-01-08", "name": "Downbeats & Distortions"},
-        {"date": "2026-01-09", "name": "The Taj Motel Trio"},
         {"date": "2026-01-23", "name": "High On Fire (Night 1)"},
         {"date": "2026-01-24", "name": "High On Fire (Night 2)"}
     ],
     EARL: [
         {"date": "2026-01-16", "name": "Pissed Jeans"},
-        {"date": "2026-01-21", "name": "Shiner"},
-        {"date": "2026-01-24", "name": "Vio-lence / Deceased"},
-        {"date": "2026-02-06", "name": "Matt Pryor (The Get Up Kids)"},
-        {"date": "2026-03-05", "name": "Rivers of Nihil"}
+        {"date": "2026-03-05", "name": "Rivers of Nihil / Cynic"}
     ],
     BOGGS: [
-        {"date": "2026-01-09", "name": "Ozello / Kyle Lewis / Yankee Roses"},
-        {"date": "2026-01-10", "name": "Elijah Cruise / MENU / Dogwood"},
-        {"date": "2026-01-17", "name": "The Carolyn / Knives / Wes Hoffman"},
-        {"date": "2026-01-31", "name": "Palaces / Muelas / Leafblower"},
-        {"date": "2026-02-05", "name": "Ritual Arcana (Wino)"},
-        {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill"},
-        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal"},
-        {"date": "2026-02-28", "name": "Doesin / Star Funeral"},
         {"date": "2026-03-03", "name": "Temptress / Friendship Commanders"},
-        {"date": "2026-03-06", "name": "Author & Punisher / King Yosef / Black Magnet"} # Fixed!
+        {"date": "2026-03-06", "name": "Author & Punisher / King Yosef"}
+    ],
+    CULT_SHOCK: [
+        {"date": "2026-01-18", "name": "Second Death / Cruel Bones"},
+        {"date": "2026-03-20", "name": "Bullshit Detector / Antagonizers"}
+    ],
+    # NEW: The Eastern Highlights (AXS)
+    EASTERN: [
+        {"date": "2026-01-29", "name": "The Wood Brothers"},
+        {"date": "2026-02-27", "name": "STS9 (Night 1)"},
+        {"date": "2026-02-28", "name": "STS9 (Night 2)"},
+        {"date": "2026-03-07", "name": "Machine Girl / Show Me The Body"},
+        {"date": "2026-03-12", "name": "Cat Power (The Greatest 20th Anniversary)"},
+        {"date": "2026-04-17", "name": "Acid Bath / Crowbar / Eyehategod"}
+    ],
+    MASQ: [
+        {"date": "2026-02-19", "name": "clipping. / Open Mike Eagle"}
     ]
 }
 
 def fetch_ticketmaster():
     api_key = os.getenv("TM_API_KEY")
-    if not api_key: 
-        print("[!] No Ticketmaster API Key found.")
-        return []
+    if not api_key: return []
     url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100"
     try:
         r = requests.get(url)
@@ -75,48 +79,40 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Starting sync...")
+        print("[*] Rebuilding database with The Eastern...")
         tm_list = fetch_ticketmaster()
-        print(f"[*] Found {len(tm_list)} shows on Ticketmaster.")
-        
-        # Clear database to prevent duplicates
         db.query(Event).delete()
         
         today = date.today()
 
-        # Add Ticketmaster shows (The Tabernacle, Masquerade, etc)
         for e in tm_list:
             event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if event_date < today: continue
-            # Don't let TM override our manual venue list (TM is often wrong about Earl/Boggs links)
-            if any(v.lower() in e['venue'].lower() for v in ["boggs", "the earl", "529"]):
+            # Exclude manual venues to prevent AXS/TM duplicate mess
+            if any(v.lower() in e['venue'].lower() for v in ["boggs", "the earl", "529", "culture shock", "the eastern"]):
                 continue
             db.add(Event(tm_id=e['id'], name=e['name'], date_time=event_date, venue_name=e['venue'], ticket_url=e['url']))
         
-        # Add our high-quality Verified List
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
             if venue == EARL: link = "https://badearl.freshtix.com/"
             if venue == BOGGS: link = "https://www.freshtix.com/organizations/arippinproduction"
+            if venue == CULT_SHOCK: link = "https://www.venuepilot.co/events/cultureshock"
+            if venue == EASTERN: link = "https://www.easternatl.com/calendar/"
             
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
                 if dt < today: continue
-                
-                # Create a unique ID for manual entries
-                manual_id = f"man-{venue[:3].lower()}-{item['date']}-{item['name'][:5].replace(' ', '').lower()}"
-                
                 db.add(Event(
-                    tm_id=manual_id,
+                    tm_id=f"man-{venue[:3].lower()}-{item['date']}-{item['name'][:5].lower()}",
                     name=item['name'],
                     date_time=dt,
                     venue_name=venue,
                     ticket_url=link
                 ))
-        
         db.commit()
-        print("[+] Sync complete. Database is up to date.")
+        print("[+] Sync complete! The Eastern is live.")
     finally:
         db.close()
 
