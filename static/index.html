@@ -10,6 +10,8 @@
             --bg: #121212; 
             --card-bg: #1e1e1e;
             --text: #ffffff;
+            --highlight: #3a3200; /* Subtle dark gold for dark mode */
+            --highlight-border: #fbc02d;
         }
         body { 
             font-family: 'Segoe UI', system-ui, sans-serif; 
@@ -36,8 +38,16 @@
             border: 1px solid #333;
             display: flex; 
             flex-direction: column; 
-            transition: transform 0.2s, border-color 0.2s; 
+            transition: transform 0.2s, border-color 0.2s, background-color 0.3s; 
+            position: relative;
         }
+
+        /* The Highlight State */
+        .card.is-highlighted {
+            background-color: var(--highlight);
+            border-color: var(--highlight-border);
+        }
+
         .card:hover { 
             transform: translateY(-5px); 
             border-color: var(--primary);
@@ -47,6 +57,11 @@
         .name { font-size: 1.3rem; margin: 0 0 10px 0; color: #fff; flex-grow: 1; }
         .venue { color: #bbb; font-size: 0.9rem; margin-bottom: 20px; }
         
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
         .btn { 
             background: var(--primary); 
             color: white; 
@@ -55,9 +70,29 @@
             padding: 12px; 
             border-radius: 8px; 
             font-weight: bold; 
+            flex: 2;
             transition: opacity 0.2s;
         }
-        .btn:hover { opacity: 0.9; }
+
+        .highlight-btn {
+            background: #333;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            flex: 1;
+            font-size: 1.1rem;
+            transition: background 0.2s;
+        }
+
+        .is-highlighted .highlight-btn {
+            background: var(--highlight-border);
+            color: black;
+            border-color: var(--highlight-border);
+        }
+
+        .btn:hover, .highlight-btn:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -72,11 +107,30 @@
 </div>
 
 <script>
+    // Toggle the highlight and save to localStorage
+    function toggleHighlight(showId) {
+        const card = document.getElementById(`card-${showId}`);
+        const isHighlighted = card.classList.toggle('is-highlighted');
+        
+        let savedHighlights = JSON.parse(localStorage.getItem('atl_highlights')) || [];
+        
+        if (isHighlighted) {
+            if (!savedHighlights.includes(showId)) savedHighlights.push(showId);
+        } else {
+            savedHighlights = savedHighlights.filter(id => id !== showId);
+        }
+        
+        localStorage.setItem('atl_highlights', JSON.stringify(savedHighlights));
+    }
+
     async function loadEvents() {
         try {
             const response = await fetch('/events');
             const events = await response.json();
             const container = document.getElementById('event-container');
+            
+            // Get current highlights from memory
+            const savedHighlights = JSON.parse(localStorage.getItem('atl_highlights')) || [];
             
             if (!events || events.length === 0) {
                 container.innerHTML = "<p>No shows found. Run the collector!</p>";
@@ -85,25 +139,26 @@
 
             container.innerHTML = events.map(event => {
                 let formattedDate = 'Date TBA';
-                
-                // Matches "date_time" from your Python API
                 if (event.date_time) { 
                     const [year, month, day] = event.date_time.split('-');
                     const dateObj = new Date(year, month - 1, day); 
-                    
                     formattedDate = dateObj.toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
+                        weekday: 'short', month: 'short', day: 'numeric' 
                     });
                 }
 
+                // Check if this specific show was previously highlighted
+                const highlightClass = savedHighlights.includes(event.tm_id) ? 'is-highlighted' : '';
+
                 return `
-                    <div class="card">
+                    <div class="card ${highlightClass}" id="card-${event.tm_id}">
                         <div class="date">${formattedDate}</div>
                         <h3 class="name">${event.name}</h3>
                         <div class="venue">📍 ${event.venue_name}</div>
-                        <a href="${event.ticket_url}" target="_blank" class="btn">Get Tickets</a>
+                        <div class="button-group">
+                            <a href="${event.ticket_url}" target="_blank" class="btn">Tickets</a>
+                            <button class="highlight-btn" onclick="toggleHighlight('${event.tm_id}')">⭐</button>
+                        </div>
                     </div>
                 `;
             }).join('');
