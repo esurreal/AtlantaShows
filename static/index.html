@@ -14,7 +14,7 @@
             --highlight-bg: #2d2a16; 
         }
         body { 
-            font-family: 'Segoe UI', sans-serif; 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
             background: var(--bg); 
             color: var(--text);
             margin: 0; 
@@ -46,7 +46,7 @@
 
         .event-row.is-highlighted {
             background: var(--highlight-bg) !important;
-            border-left: 4px solid var(--gold);
+            box-shadow: inset 4px 0 0 var(--gold);
         }
 
         td { padding: 15px 10px; vertical-align: middle; }
@@ -63,15 +63,12 @@
             cursor: pointer;
             padding: 0;
             line-height: 1;
-            transition: color 0.2s, transform 0.1s;
+            transition: color 0.2s;
         }
         
         .is-highlighted .star-btn {
             color: var(--gold) !important;
         }
-        
-        .star-btn:hover { color: #888; }
-        .star-btn:active { transform: scale(1.3); }
 
         .ticket-link {
             color: var(--primary);
@@ -115,7 +112,7 @@
 </div>
 
 <script>
-    // Logic to toggle stars
+    // 1. Toggling Logic (No change here)
     function toggleHighlight(showId) {
         const row = document.getElementById(`row-${showId}`);
         if (!row) return;
@@ -131,7 +128,7 @@
         localStorage.setItem('atl_stars', JSON.stringify(saved));
     }
 
-    // Set up the Clear Button listener
+    // 2. Event Listeners for Buttons (CSP Friendly)
     document.getElementById('clear-btn').addEventListener('click', () => {
         if(confirm("Reset all highlights?")) {
             localStorage.removeItem('atl_stars');
@@ -139,6 +136,7 @@
         }
     });
 
+    // 3. Main Data Loader
     async function loadEvents() {
         try {
             const response = await fetch('/events');
@@ -151,7 +149,6 @@
                 return;
             }
 
-            // Create the HTML string
             container.innerHTML = events.map(event => {
                 const showId = event.tm_id || event.name.replace(/\s+/g, '-').toLowerCase();
                 const highlightClass = saved.includes(showId) ? 'is-highlighted' : '';
@@ -178,18 +175,16 @@
                 `;
             }).join('');
 
-            // After HTML is injected, attach listeners to the stars
-            // This avoids using "onclick" in the HTML, bypassing the CSP error
-            document.querySelectorAll('.star-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const id = this.getAttribute('data-id');
+            // ATTACH CLICK LISTENERS MANUALLY (To avoid CSP block)
+            document.querySelectorAll('.star-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
                     toggleHighlight(id);
                 });
             });
 
         } catch (e) {
-            console.error("Fetch error:", e);
-            document.getElementById('event-container').innerHTML = "<tr><td colspan='5'>Error loading shows.</td></tr>";
+            console.error("Error loading events:", e);
         }
     }
     
