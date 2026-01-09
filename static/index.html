@@ -35,7 +35,6 @@
 
         th { text-align: left; border-bottom: 2px solid #333; padding: 10px; color: #888; font-size: 0.8rem; text-transform: uppercase; }
 
-        /* THE ROW STYLING */
         .event-row { 
             border-bottom: 1px solid #333;
             transition: background 0.2s;
@@ -45,7 +44,6 @@
             background: var(--row-hover);
         }
 
-        /* HIGHLIGHTED STATE */
         .event-row.is-highlighted {
             background: var(--highlight-bg) !important;
             border-left: 4px solid var(--gold);
@@ -57,11 +55,10 @@
         .name-cell { font-size: 1.1rem; }
         .venue-cell { color: #bbb; }
 
-        /* THE STAR BUTTON */
         .star-btn {
             background: none;
             border: none;
-            color: #444; /* Dim grey by default */
+            color: #444; 
             font-size: 1.5rem;
             cursor: pointer;
             padding: 0;
@@ -69,12 +66,11 @@
             transition: color 0.2s, transform 0.1s;
         }
         
-        /* This makes the star turn Gold when the row is highlighted */
         .is-highlighted .star-btn {
             color: var(--gold) !important;
         }
         
-        .star-btn:hover { color: #666; }
+        .star-btn:hover { color: #888; }
         .star-btn:active { transform: scale(1.3); }
 
         .ticket-link {
@@ -99,14 +95,15 @@
 
 <header>
     <h1>🍑 ATL Live</h1>
-    <button id="clear-btn" onclick="clearAll()">Clear Stars</button>
+    <button id="clear-btn">Clear Stars</button>
 </header>
 
 <div class="container">
     <table id="event-table">
         <thead>
             <tr>
-                <th style="width: 40px;"></th> <th>Date</th>
+                <th style="width: 40px;"></th>
+                <th>Date</th>
                 <th>Show</th>
                 <th>Venue</th>
                 <th>Tickets</th>
@@ -118,13 +115,10 @@
 </div>
 
 <script>
-    // 1. Toggle the star state
+    // Logic to toggle stars
     function toggleHighlight(showId) {
         const row = document.getElementById(`row-${showId}`);
-        if (!row) {
-            console.error("Could not find row with ID:", `row-${showId}`);
-            return;
-        }
+        if (!row) return;
 
         const isHighlighted = row.classList.toggle('is-highlighted');
         let saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
@@ -137,22 +131,19 @@
         localStorage.setItem('atl_stars', JSON.stringify(saved));
     }
 
-    // 2. Clear all stars
-    function clearAll() {
+    // Set up the Clear Button listener
+    document.getElementById('clear-btn').addEventListener('click', () => {
         if(confirm("Reset all highlights?")) {
             localStorage.removeItem('atl_stars');
             location.reload();
         }
-    }
+    });
 
-    // 3. Load events from the Python backend
     async function loadEvents() {
         try {
             const response = await fetch('/events');
             const events = await response.json();
             const container = document.getElementById('event-container');
-            
-            // Get saved stars from browser memory
             const saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
             
             if (!events || events.length === 0) {
@@ -160,12 +151,11 @@
                 return;
             }
 
+            // Create the HTML string
             container.innerHTML = events.map(event => {
-                // Ensure we have a valid ID. Use a fallback if tm_id is missing.
                 const showId = event.tm_id || event.name.replace(/\s+/g, '-').toLowerCase();
                 const highlightClass = saved.includes(showId) ? 'is-highlighted' : '';
                 
-                // Date formatting (expects YYYY-MM-DD)
                 let dateDisplay = 'TBA';
                 if (event.date_time) {
                     const parts = event.date_time.split('-');
@@ -176,7 +166,7 @@
                 return `
                     <tr class="event-row ${highlightClass}" id="row-${showId}">
                         <td>
-                            <button class="star-btn" onclick="toggleHighlight('${showId}')">★</button>
+                            <button class="star-btn" data-id="${showId}">★</button>
                         </td>
                         <td class="date-cell">${dateDisplay}</td>
                         <td class="name-cell"><strong>${event.name}</strong></td>
@@ -187,13 +177,22 @@
                     </tr>
                 `;
             }).join('');
+
+            // After HTML is injected, attach listeners to the stars
+            // This avoids using "onclick" in the HTML, bypassing the CSP error
+            document.querySelectorAll('.star-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    toggleHighlight(id);
+                });
+            });
+
         } catch (e) {
             console.error("Fetch error:", e);
             document.getElementById('event-container').innerHTML = "<tr><td colspan='5'>Error loading shows.</td></tr>";
         }
     }
     
-    // Start the loading process
     loadEvents();
 </script>
 
