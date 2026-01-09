@@ -19,7 +19,6 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-# Standardize names
 BOGGS = "Boggs Social & Supply"
 EARL = "The EARL"
 V529 = "529"
@@ -27,12 +26,22 @@ CULT_SHOCK = "Culture Shock"
 EASTERN = "The Eastern"
 MASQ = "The Masquerade"
 
-# FULL VERIFIED LIST: Restored Boggs + Eastern + Culture Shock
+# UPDATED VERIFIED LIST: Full 529, Boggs, and Culture Shock restoration
 VERIFIED_DATA = {
     V529: [
+        {"date": "2026-01-08", "name": "Downbeats & Distortions"},
+        {"date": "2026-01-09", "name": "The Taj Motel Trio"},
+        {"date": "2026-01-15", "name": "Elysium / After All This / Winder"},
+        {"date": "2026-01-18", "name": "The Warsaw Clinic"},
+        {"date": "2026-01-19", "name": "Anti-Sapien / Borzoi / Sewage Bath"},
+        {"date": "2026-01-20", "name": "ENMY / Softspoken / Summer Hoop"},
         {"date": "2026-01-23", "name": "High On Fire (Night 1)"},
         {"date": "2026-01-24", "name": "High On Fire (Night 2)"},
-        {"date": "2026-02-14", "name": "The Coathangers"}
+        {"date": "2026-01-29", "name": "Graveyard Hours / Triangle Fire"},
+        {"date": "2026-01-31", "name": "Too Hot for Leather (Metal Tribute)"},
+        {"date": "2026-02-06", "name": "Parachutes / Tiny Banshee"},
+        {"date": "2026-02-28", "name": "Yosemite In Black / Resistor"},
+        {"date": "2026-03-01", "name": "Vicious Rumors / Paladin / Jaeger"}
     ],
     EARL: [
         {"date": "2026-01-16", "name": "Pissed Jeans"},
@@ -47,25 +56,24 @@ VERIFIED_DATA = {
         {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm / Outfield Clovers"},
         {"date": "2026-01-31", "name": "Palaces / Muelas / Leafblower"},
         {"date": "2026-02-05", "name": "Ritual Arcana (Wino)"},
-        {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill / Squelching"},
-        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal / Drugula"},
-        {"date": "2026-02-28", "name": "Doesin / Star Funeral / Widow 100s"},
+        {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill"},
+        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal"},
         {"date": "2026-03-03", "name": "Temptress / Friendship Commanders"},
-        {"date": "2026-03-06", "name": "Author & Punisher / King Yosef / Black Magnet"}
+        {"date": "2026-03-06", "name": "Author & Punisher / King Yosef"}
     ],
     CULT_SHOCK: [
         {"date": "2026-01-18", "name": "Second Death / Cruel Bones"},
+        {"date": "2026-01-31", "name": "Los Ojos Muertos"},
         {"date": "2026-02-20", "name": "SinThya / Endeavor Into the Dark"},
+        {"date": "2026-03-14", "name": "SinThya (Return Show)"},
         {"date": "2026-03-20", "name": "Bullshit Detector / Antagonizers"}
     ],
     EASTERN: [
-        {"date": "2026-02-27", "name": "STS9 (Night 1)"},
-        {"date": "2026-02-28", "name": "STS9 (Night 2)"},
         {"date": "2026-03-07", "name": "Machine Girl / Show Me The Body"},
         {"date": "2026-04-17", "name": "Acid Bath / Crowbar / Eyehategod"}
     ],
     MASQ: [
-        {"date": "2026-02-19", "name": "clipping. / Open Mike Eagle"}
+        {"date": "2026-02-19", "name": "clipping. / Open Mike Eagle (Heaven)"}
     ]
 }
 
@@ -89,7 +97,7 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Rebuilding database (Full Venue Restoration)...")
+        print("[*] Performing Master Sync (Restoring 529, Boggs, and Culture Shock)...")
         tm_list = fetch_ticketmaster()
         db.query(Event).delete()
         
@@ -122,7 +130,7 @@ def clean_and_sync():
                     ticket_url=link
                 ))
         db.commit()
-        print("[+] Sync complete! All venues and shows restored.")
+        print("[+] Sync complete! All venues and shows are current.")
     finally:
         db.close()
 
