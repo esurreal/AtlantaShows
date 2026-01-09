@@ -9,7 +9,7 @@
             --bg: #121212; 
             --row-bg: #1e1e1e;
             --text: #ffffff;
-            --primary: #6200ee;
+            --primary: #bb86fc; /* Lighter purple for better contrast */
             --gold: #fbc02d;
             --highlight-bg: #2d2a16; 
         }
@@ -29,70 +29,62 @@
 
         /* ROW STYLING */
         .show-row { 
-            display: grid;
-            grid-template-columns: 100px 1fr 150px 100px 50px;
+            display: flex;
             align-items: center;
             background: var(--row-bg); 
             margin-bottom: 8px;
-            padding: 12px 15px;
+            padding: 15px;
             border-radius: 8px;
-            border-left: 4px solid transparent;
             gap: 15px;
-            transition: all 0.2s;
+            border: 1px solid #333;
         }
 
         /* HIGHLIGHTED ROW STATE */
         .show-row.is-highlighted {
             background: var(--highlight-bg);
-            border-left: 4px solid var(--gold);
+            border-color: var(--gold);
         }
 
-        .date { color: #00ffcc; font-weight: bold; font-size: 0.9rem; }
-        .name { font-weight: 500; font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .venue { color: #bbb; font-size: 0.9rem; }
-
-        .btn-tickets {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 0.9rem;
-            text-align: right;
-        }
-        .btn-tickets:hover { text-decoration: underline; }
-
-        /* THE STAR BUTTON */
+        /* THE STAR - BIG AND ON THE LEFT */
         .star-btn {
             background: none;
             border: none;
-            color: #444;
-            font-size: 1.5rem;
+            color: #444; /* Grey when off */
+            font-size: 1.8rem;
             cursor: pointer;
-            transition: color 0.2s;
             padding: 0;
+            margin-right: 10px;
             line-height: 1;
         }
+        
         .is-highlighted .star-btn {
-            color: var(--gold);
+            color: var(--gold); /* Bright Gold when on */
         }
-        .star-btn:hover { transform: scale(1.2); }
+
+        .date { color: #00ffcc; font-weight: bold; min-width: 80px; }
+        .details { flex-grow: 1; }
+        .name { font-weight: 500; font-size: 1.1rem; display: block; }
+        .venue { color: #bbb; font-size: 0.9rem; }
+
+        .btn-tickets {
+            background: var(--primary);
+            color: #000;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.8rem;
+            padding: 8px 12px;
+            border-radius: 5px;
+            white-space: nowrap;
+        }
 
         #clear-btn {
-            background: none;
-            border: 1px solid #ff5252;
-            color: #ff5252;
-            padding: 5px 12px;
-            border-radius: 15px;
+            background: #ff5252;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
             cursor: pointer;
-            font-size: 0.8rem;
             margin-bottom: 20px;
-        }
-
-        /* Mobile Adjustments */
-        @media (max-width: 600px) {
-            .show-row {
-                grid-template-columns: 80px 1fr 50px;
-            }
-            .venue, .btn-tickets { display: none; }
         }
     </style>
 </head>
@@ -100,15 +92,16 @@
 
 <header>
     <h1>🍑 ATL Live</h1>
-    <button id="clear-btn" onclick="clearAll()">Reset Stars</button>
+    <button id="clear-btn" onclick="clearAll()">Clear All Stars</button>
 </header>
 
 <div class="container" id="event-container">
-    <p>Finding shows...</p>
+    <p>Loading shows...</p>
 </div>
 
 <script>
     function toggleHighlight(showId) {
+        console.log("Toggling ID:", showId); // Look at your browser console (F12) to see this
         const row = document.getElementById(`row-${showId}`);
         if (!row) return;
 
@@ -124,8 +117,8 @@
     }
 
     function clearAll() {
-        if(confirm("Clear all starred shows?")) {
-            localStorage.removeItem('atl_stars');
+        if(confirm("Clear everything?")) {
+            localStorage.clear();
             location.reload();
         }
     }
@@ -138,32 +131,35 @@
             const saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
             
             if (!events || events.length === 0) {
-                container.innerHTML = "<p>No shows currently listed.</p>";
+                container.innerHTML = "<p>No shows found.</p>";
                 return;
             }
 
             container.innerHTML = events.map(event => {
-                let formattedDate = 'TBA';
-                if (event.date_time) { 
-                    const [y, m, d] = event.date_time.split('-');
-                    const dateObj = new Date(y, m - 1, d); 
-                    formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const isStarred = saved.includes(event.tm_id) ? 'is-highlighted' : '';
+                
+                // Clean up date
+                let dStr = 'TBA';
+                if (event.date_time) {
+                    const parts = event.date_time.split('-');
+                    dStr = parts[1] + '/' + parts[2]; // e.g. 01/10
                 }
 
-                const highlightClass = saved.includes(event.tm_id) ? 'is-highlighted' : '';
-
                 return `
-                    <div class="show-row ${highlightClass}" id="row-${event.tm_id}">
-                        <div class="date">${formattedDate}</div>
-                        <div class="name">${event.name}</div>
-                        <div class="venue">${event.venue_name}</div>
-                        <a href="${event.ticket_url}" target="_blank" class="btn-tickets">Tickets</a>
+                    <div class="show-row ${isStarred}" id="row-${event.tm_id}">
                         <button class="star-btn" onclick="toggleHighlight('${event.tm_id}')">★</button>
+                        <div class="date">${dStr}</div>
+                        <div class="details">
+                            <span class="name">${event.name}</span>
+                            <span class="venue">${event.venue_name}</span>
+                        </div>
+                        <a href="${event.ticket_url}" target="_blank" class="btn-tickets">TICKETS</a>
                     </div>
                 `;
             }).join('');
-        } catch (error) {
-            document.getElementById('event-container').innerHTML = "<p>Connection error.</p>";
+        } catch (e) {
+            console.error(e);
+            document.getElementById('event-container').innerHTML = "<p>Error connecting to backend.</p>";
         }
     }
     
