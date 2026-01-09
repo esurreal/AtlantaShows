@@ -6,108 +6,93 @@
     <title>ATL Live | Music Finder</title>
     <style>
         :root { 
-            --primary: #6200ee; 
             --bg: #121212; 
-            --card-bg: #1e1e1e;
+            --row-bg: #1e1e1e;
             --text: #ffffff;
-            --highlight-bg: #3a3200; 
+            --primary: #6200ee;
             --gold: #fbc02d;
+            --highlight-bg: #2d2a16; 
         }
         body { 
-            font-family: 'Segoe UI', system-ui, sans-serif; 
+            font-family: 'Segoe UI', sans-serif; 
             background: var(--bg); 
             color: var(--text);
             margin: 0; 
             padding: 20px; 
         }
-        header { text-align: center; padding: 40px 0; }
-        h1 { margin: 0; font-size: 2.5rem; }
+        header { text-align: center; padding: 20px 0; }
         
         .container { 
-            max-width: 1100px; 
+            max-width: 900px; 
             margin: auto; 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
-            gap: 20px; 
-        }
-        
-        .card { 
-            background: var(--card-bg); 
-            padding: 20px; 
-            border-radius: 12px; 
-            border: 2px solid #333;
-            display: flex; 
-            flex-direction: column; 
-            transition: all 0.2s ease; 
-            position: relative;
         }
 
-        /* VISUAL HIGHLIGHT STATE */
-        .card.is-highlighted {
-            background-color: var(--highlight-bg);
-            border-color: var(--gold);
-            transform: scale(1.02);
-            box-shadow: 0 0 15px rgba(251, 192, 45, 0.2);
-        }
-
-        .card:hover { 
-            border-color: var(--primary);
-        }
-        
-        .date { font-weight: bold; color: #00ffcc; font-size: 0.9rem; margin-bottom: 8px; }
-        .name { font-size: 1.3rem; margin: 0 0 10px 0; color: #fff; flex-grow: 1; }
-        .venue { color: #bbb; font-size: 0.9rem; margin-bottom: 20px; }
-        
-        /* THE BUTTONS */
-        .button-row {
-            display: flex;
-            gap: 10px;
-            margin-top: auto;
-        }
-
-        .btn-tickets { 
-            background: var(--primary); 
-            color: white; 
-            text-decoration: none; 
-            text-align: center; 
-            padding: 12px; 
-            border-radius: 8px; 
-            font-weight: bold; 
-            flex: 3;
-        }
-
-        .btn-star {
-            background: #333;
-            border: 1px solid #444;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            flex: 1;
-            font-size: 1.2rem;
-            display: flex;
+        /* ROW STYLING */
+        .show-row { 
+            display: grid;
+            grid-template-columns: 100px 1fr 150px 100px 50px;
             align-items: center;
-            justify-content: center;
+            background: var(--row-bg); 
+            margin-bottom: 8px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border-left: 4px solid transparent;
+            gap: 15px;
             transition: all 0.2s;
         }
 
-        /* Changes the star button appearance when active */
-        .is-highlighted .btn-star {
-            background: var(--gold);
-            color: black;
-            border-color: var(--gold);
+        /* HIGHLIGHTED ROW STATE */
+        .show-row.is-highlighted {
+            background: var(--highlight-bg);
+            border-left: 4px solid var(--gold);
         }
 
-        .btn-tickets:hover, .btn-star:hover { opacity: 0.8; }
+        .date { color: #00ffcc; font-weight: bold; font-size: 0.9rem; }
+        .name { font-weight: 500; font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .venue { color: #bbb; font-size: 0.9rem; }
+
+        .btn-tickets {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: right;
+        }
+        .btn-tickets:hover { text-decoration: underline; }
+
+        /* THE STAR BUTTON */
+        .star-btn {
+            background: none;
+            border: none;
+            color: #444;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.2s;
+            padding: 0;
+            line-height: 1;
+        }
+        .is-highlighted .star-btn {
+            color: var(--gold);
+        }
+        .star-btn:hover { transform: scale(1.2); }
 
         #clear-btn {
-            display: block;
-            margin: 0 auto 30px auto;
-            background: transparent;
-            color: #ff5252;
+            background: none;
             border: 1px solid #ff5252;
-            padding: 8px 16px;
-            border-radius: 20px;
+            color: #ff5252;
+            padding: 5px 12px;
+            border-radius: 15px;
             cursor: pointer;
+            font-size: 0.8rem;
+            margin-bottom: 20px;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .show-row {
+                grid-template-columns: 80px 1fr 50px;
+            }
+            .venue, .btn-tickets { display: none; }
         }
     </style>
 </head>
@@ -115,85 +100,70 @@
 
 <header>
     <h1>🍑 ATL Live</h1>
-    <p>Live music happening in Atlanta</p>
-    <button id="clear-btn" onclick="clearAll()">Clear All Highlights</button>
+    <button id="clear-btn" onclick="clearAll()">Reset Stars</button>
 </header>
 
 <div class="container" id="event-container">
-    <p>Loading the underground...</p>
+    <p>Finding shows...</p>
 </div>
 
 <script>
-    // 1. TOGGLE LOGIC
     function toggleHighlight(showId) {
-        const card = document.getElementById(`card-${showId}`);
-        if (!card) return;
+        const row = document.getElementById(`row-${showId}`);
+        if (!row) return;
 
-        // Visual Toggle
-        const isNowHighlighted = card.classList.toggle('is-highlighted');
+        const isHighlighted = row.classList.toggle('is-highlighted');
+        let saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
         
-        // Storage Toggle
-        let saved = JSON.parse(localStorage.getItem('atl_music_saves')) || [];
-        
-        if (isNowHighlighted) {
+        if (isHighlighted) {
             if (!saved.includes(showId)) saved.push(showId);
         } else {
             saved = saved.filter(id => id !== showId);
         }
-        
-        localStorage.setItem('atl_music_saves', JSON.stringify(saved));
+        localStorage.setItem('atl_stars', JSON.stringify(saved));
     }
 
-    // 2. CLEAR LOGIC
     function clearAll() {
-        if(confirm("Clear all your highlighted shows?")) {
-            localStorage.removeItem('atl_music_saves');
+        if(confirm("Clear all starred shows?")) {
+            localStorage.removeItem('atl_stars');
             location.reload();
         }
     }
 
-    // 3. LOAD DATA
     async function loadEvents() {
         try {
             const response = await fetch('/events');
             const events = await response.json();
             const container = document.getElementById('event-container');
-            
-            const saved = JSON.parse(localStorage.getItem('atl_music_saves')) || [];
+            const saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
             
             if (!events || events.length === 0) {
-                container.innerHTML = "<p>No shows found.</p>";
+                container.innerHTML = "<p>No shows currently listed.</p>";
                 return;
             }
 
             container.innerHTML = events.map(event => {
-                let formattedDate = 'Date TBA';
+                let formattedDate = 'TBA';
                 if (event.date_time) { 
-                    const [year, month, day] = event.date_time.split('-');
-                    const dateObj = new Date(year, month - 1, day); 
-                    formattedDate = dateObj.toLocaleDateString('en-US', { 
-                        weekday: 'short', month: 'short', day: 'numeric' 
-                    });
+                    const [y, m, d] = event.date_time.split('-');
+                    const dateObj = new Date(y, m - 1, d); 
+                    formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 }
 
                 const highlightClass = saved.includes(event.tm_id) ? 'is-highlighted' : '';
 
                 return `
-                    <div class="card ${highlightClass}" id="card-${event.tm_id}">
+                    <div class="show-row ${highlightClass}" id="row-${event.tm_id}">
                         <div class="date">${formattedDate}</div>
-                        <h3 class="name">${event.name}</h3>
-                        <div class="venue">📍 ${event.venue_name}</div>
-                        
-                        <div class="button-row">
-                            <a href="${event.ticket_url}" target="_blank" class="btn-tickets">Tickets</a>
-                            <button class="btn-star" onclick="toggleHighlight('${event.tm_id}')">★</button>
-                        </div>
+                        <div class="name">${event.name}</div>
+                        <div class="venue">${event.venue_name}</div>
+                        <a href="${event.ticket_url}" target="_blank" class="btn-tickets">Tickets</a>
+                        <button class="star-btn" onclick="toggleHighlight('${event.tm_id}')">★</button>
                     </div>
                 `;
             }).join('');
         } catch (error) {
-            console.error("Error:", error);
-            document.getElementById('event-container').innerHTML = "<p>Error loading data.</p>";
+            document.getElementById('event-container').innerHTML = "<p>Connection error.</p>";
         }
     }
     
