@@ -23,10 +23,18 @@ engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
 # Venue Constants
-BOGGS = "Boggs Social & Supply"; EARL = "The EARL"; V529 = "529"; CULT_SHOCK = "Culture Shock"
-EASTERN = "The Eastern"; MASQ = "The Masquerade"; T_WEST = "Terminal West"; VARIETY = "Variety Playhouse"
+BOGGS = "Boggs Social & Supply"
+EARL = "The EARL"
+V529 = "529"
+CULT_SHOCK = "Culture Shock"
+EASTERN = "The Eastern"
+MASQ = "The Masquerade"
+T_WEST = "Terminal West"
+VARIETY = "Variety Playhouse"
 
-# ALL CONFIRMED SHOWS (Kept exactly as requested)
+# ==========================================================
+# MANUALLY VERIFIED SHOWS - PRESERVED AS REQUESTED
+# ==========================================================
 VERIFIED_DATA = {
     V529: [
         {"date": "2026-01-03", "name": "Edwin & My Folks / Rahbi"},
@@ -229,23 +237,22 @@ VERIFIED_DATA = {
     ]
 }
 
-def fetch_ticketmaster():
+def fetch_tm():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    search_queries = [{"keyword": "The Masquerade", "city": "Atlanta"}, {"keyword": "Center Stage", "city": "Atlanta"}]
-    results, seen_ids = [], set()
-    for q in search_queries:
-        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={q['keyword']}&city={q['city']}&classificationName=music&size=50"
+    q = [{"keyword": "The Masquerade", "city": "Atlanta"}, {"keyword": "Tabernacle", "city": "Atlanta"}]
+    res, seen = [], set()
+    for item in q:
         try:
-            r = requests.get(url); data = r.json()
-            events = data.get('_embedded', {}).get('events', [])
+            r = requests.get(f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={item['keyword']}&city={item['city']}&classificationName=music&size=50")
+            events = r.json().get('_embedded', {}).get('events', [])
             for e in events:
-                if e['id'] not in seen_ids:
-                    results.append({"id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'], "venue": e['_embedded']['venues'][0]['name'], "url": e['url']})
-                    seen_ids.add(e['id'])
+                if e['id'] not in seen:
+                    res.append({"id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'], "venue": e['_embedded']['venues'][0]['name'], "url": e['url']})
+                    seen.add(e['id'])
             time.sleep(0.3)
         except: continue
-    return results
+    return res
 
 def build_web_page():
     db = SessionLocal()
@@ -260,50 +267,53 @@ def build_web_page():
         rows_html += f"""
         <tr>
             <td class="date-cell">{e.date_time.strftime("%a, %b %d")}</td>
-            <td>{e.name}</td>
-            <td style="color:#aaa; font-size:0.9rem;">{e.venue_name}</td>
+            <td class="lineup-cell">{e.name}</td>
+            <td class="venue-cell">{e.venue_name}</td>
             <td>
-                <a href="{e.ticket_url}" target="_blank" class="btn-ticket">Tickets</a>
+                <a href="{e.ticket_url}" target="_blank" class="btn-link">Tickets</a>
                 <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="btn-cal">📅 Cal</a>
             </td>
         </tr>"""
 
     try:
         with open("index.html", "r", encoding="utf-8") as f:
-            template = f.read()
+            full_content = f.read()
         
-        # This replaces the comment placeholder with your actual show rows
-        new_html = template.replace("", rows_html)
-        
-        with open("index.html", "w", encoding="utf-8") as f:
-            f.write(new_html)
-        print("[+] index.html updated successfully with all shows!")
-    except FileNotFoundError:
-        print("[!] Error: index.html not found. Creating a fresh one...")
-        # (Optional: build a fallback basic file here if needed)
-
-    db.close()
+        if "" in full_content:
+            new_content = full_content.replace("", rows_html)
+            with open("index.html", "w", encoding="utf-8") as f:
+                f.write(new_content)
+            print("[+] Site updated with manual shows and clean styling.")
+        else:
+            print("[!] Error: '' tag not found in index.html")
+    except Exception as ex:
+        print(f"[!] Error: {ex}")
+    finally:
+        db.close()
 
 def sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        tm_list = fetch_ticketmaster(); db.query(Event).delete(); today = date.today()
-        # Add Ticketmaster shows (skipping venues we track manually)
-        for e in tm_list:
+        tm = fetch_tm()
+        db.query(Event).delete()
+        today = date.today()
+        
+        # Add TM shows
+        for e in tm:
             dt = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if dt >= today and not any(v.lower() in e['venue'].lower() for v in ["529", "earl", "boggs"]):
                 db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
         
-        # Add all confirmed manual shows
+        # Add Manual Verified shows
         links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://freshtix.com", CULT_SHOCK: "https://venuepilot.co", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", MASQ: "https://masqueradeatlanta.com"}
         for venue, shows in VERIFIED_DATA.items():
-            for item in shows:
-                dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
+            for s in shows:
+                dt = datetime.strptime(s['date'], "%Y-%m-%d").date()
                 if dt >= today:
-                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{item['date']}", name=item['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "#")))
-        
-        db.commit(); build_web_page()
+                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{s['date']}", name=s['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "#")))
+        db.commit()
+        build_web_page()
     finally: db.close()
 
 if __name__ == "__main__":
