@@ -1,7 +1,6 @@
 import os
 import requests
 import time
-import urllib.parse
 from datetime import datetime, date
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -16,7 +15,7 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
-# Database Setup
+# Database Configuration
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" in raw_db_url else raw_db_url
 engine = create_engine(db_url)
@@ -237,7 +236,11 @@ VERIFIED_DATA = {
 
 def fetch_ticketmaster():
     api_key = os.getenv("TM_API_KEY")
-    if not api_key: return []
+    if not api_key: 
+        print("[!] No TM_API_KEY found in environment variables.")
+        return []
+    
+    # We use a mix of specific keywords to catch sub-rooms and main stages
     search_queries = [
         {"keyword": "The Masquerade", "city": "Atlanta"},
         {"keyword": "Center Stage", "city": "Atlanta"},
@@ -247,101 +250,72 @@ def fetch_ticketmaster():
         {"keyword": "Buckhead Theatre", "city": "Atlanta"},
         {"keyword": "Coca-Cola Roxy", "city": "Atlanta"}
     ]
-    results, seen_ids = [], set()
+    
+    results = []
+    seen_ids = set()
+    
     for query in search_queries:
         url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={query['keyword']}&city={query['city']}&classificationName=music&size=100"
         try:
-            r = requests.get(url); data = r.json()
+            r = requests.get(url)
+            data = r.json()
             events = data.get('_embedded', {}).get('events', [])
             for e in events:
                 if e['id'] not in seen_ids:
-                    results.append({"id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'], "venue": e['_embedded']['venues'][0]['name'], "url": e['url']})
+                    results.append({
+                        "id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'],
+                        "venue": e['_embedded']['venues'][0]['name'], "url": e['url']
+                    })
                     seen_ids.add(e['id'])
-            time.sleep(0.3)
-        except: continue
+            # Sleep briefly to respect the 5-call-per-second limit
+            time.sleep(0.3) 
+        except Exception as err:
+            print(f"[!] Error fetching {query['keyword']}: {err}")
+            continue
     return results
-
-def generate_ics_data(name, date_str, venue, url):
-    """Creates a browser-friendly data URI for an iCal file."""
-    # Remove slash from names for file compatibility
-    clean_name = name.replace("/", "-")
-    start = date_str.replace("-", "") + "T200000"
-    end = date_str.replace("-", "") + "T230000"
-    ics_body = f"BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:{clean_name}\nDTSTART:{start}\nDTEND:{end}\nLOCATION:{venue}\nDESCRIPTION:Tickets: {url}\nEND:VEVENT\nEND:VCALENDAR"
-    return "data:text/calendar;charset=utf8," + urllib.parse.quote(ics_body)
-
-def build_web_page():
-    db = SessionLocal()
-    events = db.query(Event).order_by(Event.date_time).all()
-    
-    html = """
-    <html>
-    <head>
-        <title>Atlanta Show Calendar</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #000; color: #fff; padding: 20px; }
-            h1 { font-size: 24px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-            .event { background: #111; padding: 15px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #222; }
-            .date { color: #888; font-weight: bold; font-size: 14px; }
-            .venue { color: #00f2ff; font-size: 14px; }
-            .name { font-size: 18px; margin: 5px 0; display: block; }
-            .btn-row { display: flex; gap: 10px; margin-top: 12px; }
-            .btn { flex: 1; text-align: center; padding: 10px; background: #222; color: #fff; text-decoration: none; border-radius: 8px; font-size: 14px; border: 1px solid #333; }
-            .btn:active { background: #333; }
-            .cal-btn { border-color: #00f2ff22; color: #00f2ff; }
-        </style>
-    </head>
-    <body>
-        <h1>Upcoming Atlanta Shows</h1>
-    """
-    
-    for e in events:
-        cal_data = generate_ics_data(e.name, e.date_time.strftime("%Y-%m-%d"), e.venue_name, e.ticket_url)
-        html += f"""
-        <div class="event">
-            <div class="date">{e.date_time.strftime("%A, %b %d")}</div>
-            <div class="venue">{e.venue_name}</div>
-            <span class="name">{e.name}</span>
-            <div class="btn-row">
-                <a class="btn" href="{e.ticket_url}" target="_blank">Tickets</a>
-                <a class="btn cal-btn" href="{cal_data}" download="{e.name[:15].replace(' ', '_')}.ics">📅 Calendar</a>
-            </div>
-        </div>
-        """
-    
-    html += "</body></html>"
-    with open("index.html", "w") as f:
-        f.write(html)
-    db.close()
 
 def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Updating database and index.html...")
+        print("[*] Rebuilding Master Database...")
         tm_list = fetch_ticketmaster()
         db.query(Event).delete()
         today = date.today()
 
-        # Process API results (skipping venues we track manually)
+        # Process API results
         for e in tm_list:
-            dt = datetime.strptime(e['date'], "%Y-%m-%d").date()
-            if dt < today: continue
-            if any(v.lower() in e['venue'].lower() for v in ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]): continue
-            db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
+            event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
+            if event_date < today: continue
+            
+            # Prevent double-counting if TM lists our manual venues
+            manual_venues = ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]
+            if any(v.lower() in e['venue'].lower() for v in manual_venues):
+                continue
+            
+            db.add(Event(tm_id=e['id'], name=e['name'], date_time=event_date, venue_name=e['venue'], ticket_url=e['url']))
         
-        # Add the manual verified data
-        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://www.freshtix.com/organizations/arippinproduction", CULT_SHOCK: "https://www.venuepilot.co/events/cultureshock", EASTERN: "https://www.easternatl.com/calendar/", T_WEST: "https://www.terminalwestatl.com/calendar/", VARIETY: "https://www.varietyplayhouse.com/calendar/", MASQ: "https://www.masqueradeatlanta.com/events/"}
+        # Add the manual/verified data
         for venue, shows in VERIFIED_DATA.items():
+            link = "https://www.freshtix.com"
+            if venue == V529: link = "https://529atlanta.com/calendar/"
+            if venue == EARL: link = "https://badearl.freshtix.com/"
+            if venue == BOGGS: link = "https://www.freshtix.com/organizations/arippinproduction"
+            if venue == CULT_SHOCK: link = "https://www.venuepilot.co/events/cultureshock"
+            if venue == EASTERN: link = "https://www.easternatl.com/calendar/"
+            if venue == T_WEST: link = "https://www.terminalwestatl.com/calendar/"
+            if venue == VARIETY: link = "https://www.varietyplayhouse.com/calendar/"
+            if venue == MASQ: link = "https://www.masqueradeatlanta.com/events/"
+            
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
-                if dt >= today:
-                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{item['date']}", name=item['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "https://freshtix.com")))
-        
+                if dt < today: continue
+                db.add(Event(
+                    tm_id=f"man-{venue[:3].lower()}-{item['date']}-{item['name'][:5].lower().replace(' ', '')}",
+                    name=item['name'], date_time=dt, venue_name=venue, ticket_url=link
+                ))
         db.commit()
-        build_web_page()
-        print(f"[+] Success! {db.query(Event).count()} shows synced. index.html updated.")
+        print(f"[+] Sync complete! Added {db.query(Event).count()} total events.")
     finally:
         db.close()
 
