@@ -35,7 +35,7 @@ def read_root():
     today = date.today()
     try:
         raw_events = db.query(Event).order_by(Event.date_time).all()
-        grouped_events = defaultdict(lambda: {"artists": set(), "link": "", "is_manual": False})
+        grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         unique_dropdown_venues = set()
         
         for e in raw_events:
@@ -50,7 +50,6 @@ def read_root():
             key = (e.date_time, v_display)
             grouped_events[key]["artists"].add(e.name)
             grouped_events[key]["link"] = e.ticket_url
-            if e.tm_id.startswith("man-"): grouped_events[key]["is_manual"] = True
 
         venue_options = '<option value="all">All Venues</option>'
         for v in sorted(list(unique_dropdown_venues)):
@@ -62,14 +61,11 @@ def read_root():
             safe_id = f"{event_date.isoformat()}-{venue.replace(' ', '-').lower()}"
             filter_venue = "The Masquerade" if "Masquerade" in venue else ("Center Stage / Loft / Vinyl" if any(x in venue for x in ["Center Stage", "The Loft", "Vinyl"]) else venue)
             
-            # Subtle gray badge instead of purple box
-            badge = '<span class="manual-badge">Verified</span>' if data["is_manual"] else ""
-            
             rows += f"""
             <tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_venue}">
                 <td><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
-                <td class="lineup-cell"><strong>{full_lineup}</strong> {badge}</td>
+                <td class="lineup-cell"><strong>{full_lineup}</strong></td>
                 <td class="venue-cell">{venue}</td>
                 <td><a href="{data['link']}" target="_blank" class="ticket-link">Tickets</a></td>
             </tr>
@@ -90,18 +86,19 @@ def read_root():
                         --text-light: #888888;
                         --primary: #007aff; 
                         --gold: #fbc02d; 
-                        --row-hover: #f5f5f5; 
+                        --row-hover: #f7f7f7; 
                         --highlight-bg: #fffdeb; 
                         --border: #eeeeee;
                     }}
                     body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; }}
                     .container {{ max-width: 1000px; margin: auto; }}
                     header {{ text-align: center; padding: 30px 0; }}
-                    h1 {{ letter-spacing: -1px; color: #222; }}
+                    h1 {{ letter-spacing: -1px; color: #222; margin-bottom: 5px; }}
                     
                     .controls-box {{ background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
                     .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
-                    input#search, select#venue-select {{ padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 1rem; flex-grow: 1; }}
+                    input#search, select#venue-select {{ padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 1rem; flex-grow: 1; outline: none; }}
+                    input#search:focus {{ border-color: var(--primary); }}
                     
                     .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }}
                     .btn-group {{ display: flex; gap: 5px; }}
@@ -110,7 +107,6 @@ def read_root():
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
                     
                     .view-label {{ font-weight: bold; color: var(--primary); min-width: 120px; text-align: center; }}
-                    .manual-badge {{ font-size: 0.6rem; color: #999; border: 1px solid #ddd; padding: 2px 6px; border-radius: 4px; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.5px; }}
                     
                     table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }}
@@ -118,19 +114,18 @@ def read_root():
                     
                     .event-row:hover {{ background: var(--row-hover); }}
                     .is-highlighted {{ background: var(--highlight-bg) !important; border-left: 4px solid var(--gold); }}
-                    .star-btn {{ background: none; border: none; color: #ddd; font-size: 1.4rem; cursor: pointer; transition: 0.2s; }}
-                    .star-btn:hover {{ color: #bbb; }}
+                    .star-btn {{ background: none; border: none; color: #eee; font-size: 1.4rem; cursor: pointer; transition: 0.2s; padding: 0; }}
+                    .star-btn:hover {{ color: #ccc; }}
                     .is-highlighted .star-btn {{ color: var(--gold) !important; }}
                     
-                    .date-cell {{ color: #666; font-weight: 700; white-space: nowrap; }}
-                    .lineup-cell {{ font-size: 1.05rem; color: #222; }}
+                    .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 110px; }}
+                    .lineup-cell {{ font-size: 1.05rem; color: #333; }}
                     .venue-cell {{ color: var(--text-light); font-size: 0.9rem; }}
                     .ticket-link {{ color: var(--primary); text-decoration: none; font-weight: bold; }}
-                    .ticket-link:hover {{ text-decoration: underline; }}
                     
                     .hidden {{ display: none !important; }}
-                    .clear-link {{ color: #bbb; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; }}
-                    .clear-link:hover {{ color: #888; }}
+                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; }}
+                    .clear-link:hover {{ color: #999; }}
                 </style>
             </head>
             <body>
