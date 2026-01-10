@@ -16,6 +16,7 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
+# Database Setup
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" in raw_db_url else raw_db_url
 engine = create_engine(db_url)
@@ -262,9 +263,11 @@ def fetch_ticketmaster():
 
 def generate_ics_data(name, date_str, venue, url):
     """Creates a browser-friendly data URI for an iCal file."""
+    # Remove slash from names for file compatibility
+    clean_name = name.replace("/", "-")
     start = date_str.replace("-", "") + "T200000"
     end = date_str.replace("-", "") + "T230000"
-    ics_body = f"BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:{name}\nDTSTART:{start}\nDTEND:{end}\nLOCATION:{venue}\nDESCRIPTION:Tickets: {url}\nEND:VEVENT\nEND:VCALENDAR"
+    ics_body = f"BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:{clean_name}\nDTSTART:{start}\nDTEND:{end}\nLOCATION:{venue}\nDESCRIPTION:Tickets: {url}\nEND:VEVENT\nEND:VCALENDAR"
     return "data:text/calendar;charset=utf8," + urllib.parse.quote(ics_body)
 
 def build_web_page():
@@ -277,10 +280,16 @@ def build_web_page():
         <title>Atlanta Show Calendar</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            body { font-family: sans-serif; background: #121212; color: white; padding: 20px; }
-            .event { background: #1e1e1e; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 5px solid #00f2ff; }
-            .btn { display: inline-block; padding: 8px 12px; margin-top: 10px; background: #333; color: #00f2ff; text-decoration: none; border-radius: 4px; font-size: 14px; border: 1px solid #444; }
-            .btn:hover { background: #444; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #000; color: #fff; padding: 20px; }
+            h1 { font-size: 24px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+            .event { background: #111; padding: 15px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #222; }
+            .date { color: #888; font-weight: bold; font-size: 14px; }
+            .venue { color: #00f2ff; font-size: 14px; }
+            .name { font-size: 18px; margin: 5px 0; display: block; }
+            .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+            .btn { flex: 1; text-align: center; padding: 10px; background: #222; color: #fff; text-decoration: none; border-radius: 8px; font-size: 14px; border: 1px solid #333; }
+            .btn:active { background: #333; }
+            .cal-btn { border-color: #00f2ff22; color: #00f2ff; }
         </style>
     </head>
     <body>
@@ -291,10 +300,13 @@ def build_web_page():
         cal_data = generate_ics_data(e.name, e.date_time.strftime("%Y-%m-%d"), e.venue_name, e.ticket_url)
         html += f"""
         <div class="event">
-            <strong>{e.date_time.strftime("%a, %b %d")}</strong> - {e.venue_name}<br>
-            <span style="font-size: 1.2em;">{e.name}</span><br>
-            <a class="btn" href="{e.ticket_url}" target="_blank">Tickets</a>
-            <a class="btn" href="{cal_data}" download="{e.name[:10]}.ics">📅 Save to Calendar</a>
+            <div class="date">{e.date_time.strftime("%A, %b %d")}</div>
+            <div class="venue">{e.venue_name}</div>
+            <span class="name">{e.name}</span>
+            <div class="btn-row">
+                <a class="btn" href="{e.ticket_url}" target="_blank">Tickets</a>
+                <a class="btn cal-btn" href="{cal_data}" download="{e.name[:15].replace(' ', '_')}.ics">📅 Calendar</a>
+            </div>
         </div>
         """
     
@@ -307,26 +319,29 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Syncing data...")
+        print("[*] Updating database and index.html...")
         tm_list = fetch_ticketmaster()
         db.query(Event).delete()
         today = date.today()
 
+        # Process API results (skipping venues we track manually)
         for e in tm_list:
             dt = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if dt < today: continue
             if any(v.lower() in e['venue'].lower() for v in ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]): continue
             db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
         
+        # Add the manual verified data
+        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://www.freshtix.com/organizations/arippinproduction", CULT_SHOCK: "https://www.venuepilot.co/events/cultureshock", EASTERN: "https://www.easternatl.com/calendar/", T_WEST: "https://www.terminalwestatl.com/calendar/", VARIETY: "https://www.varietyplayhouse.com/calendar/", MASQ: "https://www.masqueradeatlanta.com/events/"}
         for venue, shows in VERIFIED_DATA.items():
-            links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://www.freshtix.com/organizations/arippinproduction", CULT_SHOCK: "https://www.venuepilot.co/events/cultureshock", EASTERN: "https://www.easternatl.com/calendar/", T_WEST: "https://www.terminalwestatl.com/calendar/", VARIETY: "https://www.varietyplayhouse.com/calendar/", MASQ: "https://www.masqueradeatlanta.com/events/"}
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
                 if dt >= today:
                     db.add(Event(tm_id=f"man-{venue[:3].lower()}-{item['date']}", name=item['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "https://freshtix.com")))
+        
         db.commit()
         build_web_page()
-        print("[+] index.html has been updated!")
+        print(f"[+] Success! {db.query(Event).count()} shows synced. index.html updated.")
     finally:
         db.close()
 
