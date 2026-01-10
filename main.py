@@ -1,5 +1,4 @@
 import os
-import os
 import subprocess
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -40,24 +39,31 @@ def read_root():
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
         # Track unique venues for the dropdown
-        unique_venues = set()
+        unique_dropdown_venues = set()
         
         for e in raw_events:
             if e.date_time < today:
                 continue
             
-            v_norm = e.venue_name
-            if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
+            # 1. Normalization for grouping/display
+            v_display = e.venue_name
+            if "Boggs" in e.venue_name: v_display = "Boggs Social & Supply"
             
-            unique_venues.add(v_norm)
+            # 2. Logic for the Dropdown (Aliasing Masquerade)
+            if "Masquerade" in v_display:
+                v_dropdown = "The Masquerade"
+            else:
+                v_dropdown = v_display
             
-            key = (e.date_time, v_norm)
+            unique_dropdown_venues.add(v_dropdown)
+            
+            key = (e.date_time, v_display)
             grouped_events[key]["artists"].add(e.name)
             grouped_events[key]["link"] = e.ticket_url
 
         # Create dropdown options HTML
         venue_options = '<option value="all">All Venues</option>'
-        for v in sorted(list(unique_venues)):
+        for v in sorted(list(unique_dropdown_venues)):
             venue_options += f'<option value="{v}">{v}</option>'
 
         rows = ""
@@ -67,11 +73,15 @@ def read_root():
             full_lineup = " / ".join(sorted(list(data["artists"])))
             safe_id = f"{event_date.isoformat()}-{venue.replace(' ', '-').lower()}"
             
+            # Tag rows with an extra attribute for the dropdown filter to catch
+            filter_venue = "The Masquerade" if "Masquerade" in venue else venue
+            
             rows += f"""
             <tr class="event-row" 
                 id="row-{safe_id}" 
                 data-date="{event_date.isoformat()}"
-                data-venue="{venue}">
+                data-venue-display="{venue}"
+                data-venue-filter="{filter_venue}">
                 <td><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
                 <td class="name-cell"><strong>{full_lineup}</strong></td>
@@ -203,11 +213,11 @@ def read_root():
 
                         document.querySelectorAll('.event-row').forEach(row => {{
                             const rowDate = new Date(row.getAttribute('data-date') + 'T00:00:00');
-                            const rowVenue = row.getAttribute('data-venue');
+                            const filterVenue = row.getAttribute('data-venue-filter');
                             
                             const textMatch = row.innerText.toUpperCase().includes(q);
                             const starMatch = !starredOnly || row.classList.contains('is-highlighted');
-                            const venueMatch = (selectedVenue === 'all' || rowVenue === selectedVenue);
+                            const venueMatch = (selectedVenue === 'all' || filterVenue === selectedVenue);
                             
                             let dateMatch = false;
                             if (currentTab === 'all') {{
