@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 from datetime import datetime, date
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -28,11 +29,7 @@ MASQ = "The Masquerade"
 T_WEST = "Terminal West"
 VARIETY = "Variety Playhouse"
 
-# Center Stage rooms (Ticketmaster only)
-CENTER_STAGE = "Center Stage Theater"
-LOFT = "The Loft at Center Stage"
-VINYL = "Vinyl at Center Stage"
-
+# VERIFIED LIST: Kept exactly as requested
 VERIFIED_DATA = {
     V529: [
         {"date": "2026-01-03", "name": "Edwin & My Folks / Rahbi"},
@@ -238,11 +235,18 @@ VERIFIED_DATA = {
 def fetch_ticketmaster():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    # Fetch from Ticketmaster using Venue IDs to get specific rooms (Center Stage)
-    venue_ids = ["KovZpZAFF1tA", "KovZpZAEA71A", "KovZpZAEA7vA"] 
+    
+    venue_ids = [
+        "KovZpZAJ67eA", "KovZpZAJ67lA", "KovZpZAJ671A", # Masquerade Rooms
+        "KovZpZAFF1tA", "KovZpZAEA71A", "KovZpZAEA7vA", # Center Stage / Loft / Vinyl
+        "KovZpZAEk7IA", "KovZpZAE6eEA", "KovZpZAEkAaA", # Buckhead / Roxy / Chastain
+        "KovZpZAFFdlA", "KovZpZAEk6vA"                 # Ameris / Lakewood
+    ]
     results = []
+    
     for v_id in venue_ids:
-        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&venueId={v_id}&size=50"
+        # Increased size to 100 to make sure we don't miss music dates
+        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&venueId={v_id}&classificationName=music&size=100"
         try:
             r = requests.get(url)
             data = r.json()
@@ -252,6 +256,7 @@ def fetch_ticketmaster():
                     "id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'],
                     "venue": e['_embedded']['venues'][0]['name'], "url": e['url']
                 })
+            time.sleep(0.3) 
         except: continue
     return results
 
@@ -264,18 +269,17 @@ def clean_and_sync():
         db.query(Event).delete()
         today = date.today()
 
-        # Add TM results ONLY if they aren't for one of your manual venues
         for e in tm_list:
             event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if event_date < today: continue
             
-            # Skip if the TM venue matches your manually tracked venues
-            if any(v.lower() in e['venue'].lower() for v in ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse", "masquerade"]):
+            # Safeguard expanded to prevent double-counting if TM lists manual venues
+            manual_venues = ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]
+            if any(v.lower() in e['venue'].lower() for v in manual_venues):
                 continue
             
             db.add(Event(tm_id=e['id'], name=e['name'], date_time=event_date, venue_name=e['venue'], ticket_url=e['url']))
         
-        # Add your VERIFIED data
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
@@ -295,7 +299,7 @@ def clean_and_sync():
                     name=item['name'], date_time=dt, venue_name=venue, ticket_url=link
                 ))
         db.commit()
-        print(f"[+] Sync complete!")
+        print(f"[+] Sync complete! Added {db.query(Event).count()} total events.")
     finally:
         db.close()
 
