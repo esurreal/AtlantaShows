@@ -272,7 +272,7 @@ def build_web_page():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>🤘 ATL Show Finder</title>
         <style>
-            body { background-color: #0d0d0d; color: #ffffff; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+            body { background-color: #ffffff; color: #222222; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
             h1 { text-align: center; font-weight: 800; font-size: 2.2rem; margin-bottom: 30px; }
             table { width: 100%; border-collapse: collapse; max-width: 900px; margin: auto; background: #161616; border-radius: 12px; overflow: hidden; }
             th { text-align: left; color: #777; border-bottom: 2px solid #222; padding: 15px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
