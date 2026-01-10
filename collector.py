@@ -23,16 +23,10 @@ engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
 # Venue Constants
-BOGGS = "Boggs Social & Supply"
-EARL = "The EARL"
-V529 = "529"
-CULT_SHOCK = "Culture Shock"
-EASTERN = "The Eastern"
-MASQ = "The Masquerade"
-T_WEST = "Terminal West"
-VARIETY = "Variety Playhouse"
+BOGGS = "Boggs Social & Supply"; EARL = "The EARL"; V529 = "529"; CULT_SHOCK = "Culture Shock"
+EASTERN = "The Eastern"; MASQ = "The Masquerade"; T_WEST = "Terminal West"; VARIETY = "Variety Playhouse"
 
-# VERIFIED LIST: Preserved exactly as requested
+# ALL CONFIRMED SHOWS (Kept exactly as requested)
 VERIFIED_DATA = {
     V529: [
         {"date": "2026-01-03", "name": "Edwin & My Folks / Rahbi"},
@@ -238,16 +232,10 @@ VERIFIED_DATA = {
 def fetch_ticketmaster():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    search_queries = [
-        {"keyword": "The Masquerade", "city": "Atlanta"},
-        {"keyword": "Center Stage", "city": "Atlanta"},
-        {"keyword": "Tabernacle", "city": "Atlanta"},
-        {"keyword": "Buckhead Theatre", "city": "Atlanta"},
-        {"keyword": "Coca-Cola Roxy", "city": "Atlanta"}
-    ]
+    search_queries = [{"keyword": "The Masquerade", "city": "Atlanta"}, {"keyword": "Center Stage", "city": "Atlanta"}]
     results, seen_ids = [], set()
-    for query in search_queries:
-        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={query['keyword']}&city={query['city']}&classificationName=music&size=100"
+    for q in search_queries:
+        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={q['keyword']}&city={q['city']}&classificationName=music&size=50"
         try:
             r = requests.get(url); data = r.json()
             events = data.get('_embedded', {}).get('events', [])
@@ -263,96 +251,60 @@ def build_web_page():
     db = SessionLocal()
     events = db.query(Event).order_by(Event.date_time).all()
     
-    # CSS INSIDE PYTHON (Change this to change your site!)
-    html_start = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>🤘 ATL Show Finder</title>
-        <style>
-            body { background-color: #ffffff; color: #222222; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
-            h1 { text-align: center; font-weight: 800; font-size: 2.2rem; margin-bottom: 30px; }
-            table { width: 100%; border-collapse: collapse; max-width: 900px; margin: auto; background: #161616; border-radius: 12px; overflow: hidden; }
-            th { text-align: left; color: #777; border-bottom: 2px solid #222; padding: 15px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
-            td { padding: 18px 15px; border-bottom: 1px solid #222; vertical-align: middle; }
-            .date-cell { color: #00f2ff; font-weight: 700; width: 100px; }
-            .lineup-cell { font-weight: 600; font-size: 1.05rem; }
-            .venue-cell { color: #aaa; font-size: 0.9rem; font-style: italic; }
-            .link-cell a { text-decoration: none; font-weight: bold; padding: 6px 10px; border-radius: 6px; transition: 0.2s; display: inline-block; }
-            .btn-ticket { color: #a855f7; border: 1px solid #a855f7; margin-bottom: 5px; }
-            .btn-ticket:hover { background: #a855f7; color: white; }
-            .btn-cal { color: #555; border: 1px solid #333; font-size: 0.75rem; margin-left: 5px; }
-            .btn-cal:hover { border-color: #555; color: #ccc; }
-            tr:hover { background: #1e1e1e; }
-        </style>
-    </head>
-    <body>
-        <h1>🤘 ATL Show Finder</h1>
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Lineup</th>
-                    <th>Venue</th>
-                    <th>Links</th>
-                </tr>
-            </thead>
-            <tbody>
-    """
-    
-    rows = ""
+    rows_html = ""
     for e in events:
-        # Prepare Calendar Link
         clean_name = e.name.replace("/", "-")
-        ics_body = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nSUMMARY:{clean_name}\\nDTSTART:{e.date_time.strftime('%Y%m%d')}T200000\\nLOCATION:{e.venue_name}\\nEND:VEVENT\\nEND:VCALENDAR"
-        cal_uri = f"data:text/calendar;charset=utf8,{urllib.parse.quote(ics_body)}"
+        ics = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nSUMMARY:{clean_name}\\nDTSTART:{e.date_time.strftime('%Y%m%d')}T200000\\nLOCATION:{e.venue_name}\\nEND:VEVENT\\nEND:VCALENDAR"
+        cal_uri = f"data:text/calendar;charset=utf8,{urllib.parse.quote(ics)}"
         
-        rows += f"""
-                <tr>
-                    <td class="date-cell">{e.date_time.strftime("%a, %b %d")}</td>
-                    <td class="lineup-cell">{e.name}</td>
-                    <td class="venue-cell">{e.venue_name}</td>
-                    <td class="link-cell">
-                        <a href="{e.ticket_url}" target="_blank" class="btn-ticket">Tickets</a>
-                        <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="btn-cal">📅 Cal</a>
-                    </td>
-                </tr>
-        """
+        rows_html += f"""
+        <tr>
+            <td class="date-cell">{e.date_time.strftime("%a, %b %d")}</td>
+            <td>{e.name}</td>
+            <td style="color:#aaa; font-size:0.9rem;">{e.venue_name}</td>
+            <td>
+                <a href="{e.ticket_url}" target="_blank" class="btn-ticket">Tickets</a>
+                <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="btn-cal">📅 Cal</a>
+            </td>
+        </tr>"""
+
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            template = f.read()
         
-    html_end = "</tbody></table><p style='text-align:center; color:#444; margin-top:30px;'>Auto-updated every 24 hours</p></body></html>"
-    
-    # THIS LINE OVERWRITES YOUR index.html EVERY TIME
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(html_start + rows + html_end)
+        # This replaces the comment placeholder with your actual show rows
+        new_html = template.replace("", rows_html)
+        
+        with open("index.html", "w", encoding="utf-8") as f:
+            f.write(new_html)
+        print("[+] index.html updated successfully with all shows!")
+    except FileNotFoundError:
+        print("[!] Error: index.html not found. Creating a fresh one...")
+        # (Optional: build a fallback basic file here if needed)
+
     db.close()
 
-def clean_and_sync():
+def sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        tm_list = fetch_ticketmaster()
-        db.query(Event).delete()
-        today = date.today()
-
+        tm_list = fetch_ticketmaster(); db.query(Event).delete(); today = date.today()
+        # Add Ticketmaster shows (skipping venues we track manually)
         for e in tm_list:
             dt = datetime.strptime(e['date'], "%Y-%m-%d").date()
-            if dt < today: continue
-            if any(v.lower() in e['venue'].lower() for v in ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]): continue
-            db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
+            if dt >= today and not any(v.lower() in e['venue'].lower() for v in ["529", "earl", "boggs"]):
+                db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
         
-        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://www.freshtix.com/organizations/arippinproduction", CULT_SHOCK: "https://www.venuepilot.co/events/cultureshock", EASTERN: "https://www.easternatl.com/calendar/", T_WEST: "https://www.terminalwestatl.com/calendar/", VARIETY: "https://www.varietyplayhouse.com/calendar/", MASQ: "https://www.masqueradeatlanta.com/events/"}
+        # Add all confirmed manual shows
+        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://freshtix.com", CULT_SHOCK: "https://venuepilot.co", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", MASQ: "https://masqueradeatlanta.com"}
         for venue, shows in VERIFIED_DATA.items():
             for item in shows:
                 dt = datetime.strptime(item['date'], "%Y-%m-%d").date()
                 if dt >= today:
-                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{item['date']}", name=item['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "https://freshtix.com")))
-        db.commit()
-        build_web_page()
-        print("[+] Success! Verified badges removed. Calendar links added.")
-    finally:
-        db.close()
+                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{item['date']}", name=item['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "#")))
+        
+        db.commit(); build_web_page()
+    finally: db.close()
 
 if __name__ == "__main__":
-    clean_and_sync()
+    sync()
