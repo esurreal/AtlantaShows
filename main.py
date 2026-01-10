@@ -1,4 +1,5 @@
 import os
+import os
 import subprocess
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -38,6 +39,9 @@ def read_root():
         raw_events = db.query(Event).order_by(Event.date_time).all()
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         
+        # Track unique venues for the dropdown
+        unique_venues = set()
+        
         for e in raw_events:
             if e.date_time < today:
                 continue
@@ -45,9 +49,16 @@ def read_root():
             v_norm = e.venue_name
             if "Boggs" in e.venue_name: v_norm = "Boggs Social & Supply"
             
+            unique_venues.add(v_norm)
+            
             key = (e.date_time, v_norm)
             grouped_events[key]["artists"].add(e.name)
             grouped_events[key]["link"] = e.ticket_url
+
+        # Create dropdown options HTML
+        venue_options = '<option value="all">All Venues</option>'
+        for v in sorted(list(unique_venues)):
+            venue_options += f'<option value="{v}">{v}</option>'
 
         rows = ""
         sorted_keys = sorted(grouped_events.keys(), key=lambda x: x[0])
@@ -60,9 +71,7 @@ def read_root():
             <tr class="event-row" 
                 id="row-{safe_id}" 
                 data-date="{event_date.isoformat()}"
-                data-month="{event_date.month - 1}"
-                data-day="{event_date.day}"
-                data-year="{event_date.year}">
+                data-venue="{venue}">
                 <td><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
                 <td class="name-cell"><strong>{full_lineup}</strong></td>
@@ -88,10 +97,14 @@ def read_root():
                     
                     .controls-box {{ background: #1e1e1e; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333; }}
                     
-                    input#search {{ 
-                        width: 100%; padding: 15px; background: #222; border: 1px solid #444; 
-                        color: white; border-radius: 8px; font-size: 1rem; box-sizing: border-box; margin-bottom: 15px;
+                    input#search, select#venue-select {{ 
+                        padding: 15px; background: #222; border: 1px solid #444; 
+                        color: white; border-radius: 8px; font-size: 1rem; box-sizing: border-box; 
                     }}
+                    input#search {{ flex-grow: 2; }}
+                    select#venue-select {{ flex-grow: 1; min-width: 200px; cursor: pointer; }}
+
+                    .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
 
                     .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }}
                     
@@ -132,7 +145,12 @@ def read_root():
 
                 <div class="container">
                     <div class="controls-box">
-                        <input type="text" id="search" placeholder="Search bands or venues...">
+                        <div class="search-row">
+                            <input type="text" id="search" placeholder="Search bands...">
+                            <select id="venue-select">
+                                {venue_options}
+                            </select>
+                        </div>
                         
                         <div class="filter-bar">
                             <div class="btn-group">
@@ -167,7 +185,6 @@ def read_root():
                     let viewingDate = new Date();
                     viewingDate.setHours(0,0,0,0);
 
-                    // 1. Storage & Highlighting
                     function initStars() {{
                         const saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
                         document.querySelectorAll('.event-row').forEach(row => {{
@@ -177,23 +194,21 @@ def read_root():
                         runFilters();
                     }}
 
-                    // 2. The Master Filter
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
+                        const selectedVenue = document.getElementById('venue-select').value;
                         const vDay = viewingDate.getDate();
                         const vMonth = viewingDate.getMonth();
                         const vYear = viewingDate.getFullYear();
 
                         document.querySelectorAll('.event-row').forEach(row => {{
                             const rowDate = new Date(row.getAttribute('data-date') + 'T00:00:00');
+                            const rowVenue = row.getAttribute('data-venue');
                             
-                            // Text Check
                             const textMatch = row.innerText.toUpperCase().includes(q);
-                            
-                            // Star Check
                             const starMatch = !starredOnly || row.classList.contains('is-highlighted');
+                            const venueMatch = (selectedVenue === 'all' || rowVenue === selectedVenue);
                             
-                            // Date Check
                             let dateMatch = false;
                             if (currentTab === 'all') {{
                                 dateMatch = true;
@@ -203,7 +218,7 @@ def read_root():
                                 dateMatch = (rowDate.getMonth() === vMonth && rowDate.getFullYear() === vYear);
                             }}
 
-                            row.style.display = (textMatch && starMatch && dateMatch) ? "" : "none";
+                            row.style.display = (textMatch && starMatch && dateMatch && venueMatch) ? "" : "none";
                         }});
                         updateLabel();
                     }}
@@ -211,7 +226,6 @@ def read_root():
                     function updateLabel() {{
                         const label = document.getElementById('view-label');
                         const nav = document.getElementById('nav-group');
-                        
                         if (currentTab === 'all') {{
                             nav.classList.add('hidden');
                         }} else {{
@@ -222,7 +236,6 @@ def read_root():
                         }}
                     }}
 
-                    // 3. Event Listeners
                     document.querySelectorAll('.tab-btn').forEach(btn => {{
                         btn.addEventListener('click', function() {{
                             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -239,6 +252,7 @@ def read_root():
                     }});
 
                     document.getElementById('search').addEventListener('keyup', runFilters);
+                    document.getElementById('venue-select').addEventListener('change', runFilters);
 
                     document.getElementById('prev-btn').addEventListener('click', () => moveDate(-1));
                     document.getElementById('next-btn').addEventListener('click', () => moveDate(1));
@@ -254,7 +268,6 @@ def read_root():
                             const id = e.target.getAttribute('data-id');
                             const row = document.getElementById('row-' + id);
                             let saved = JSON.parse(localStorage.getItem('atl_stars')) || [];
-                            
                             if (row.classList.toggle('is-highlighted')) {{
                                 saved.push(id);
                             }} else {{
