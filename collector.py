@@ -32,7 +32,7 @@ MASQ = "The Masquerade"
 T_WEST = "Terminal West"
 VARIETY = "Variety Playhouse"
 
-# VERIFIED LIST: Kept exactly as requested
+# VERIFIED LIST: Preserved exactly as requested
 VERIFIED_DATA = {
     V529: [
         {"date": "2026-01-03", "name": "Edwin & My Folks / Rahbi"},
@@ -263,6 +263,7 @@ def build_web_page():
     db = SessionLocal()
     events = db.query(Event).order_by(Event.date_time).all()
     
+    # CSS INSIDE PYTHON (Change this to change your site!)
     html_start = """
     <!DOCTYPE html>
     <html lang="en">
@@ -271,35 +272,31 @@ def build_web_page():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>🤘 ATL Show Finder</title>
         <style>
-            body { background-color: #121212; color: #ffffff; font-family: sans-serif; margin: 0; padding: 20px; }
-            h1 { text-align: center; font-size: 2rem; }
-            .search-container { background: #1e1e1e; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; max-width: 800px; margin-left: auto; margin-right: auto; }
-            table { width: 100%; border-collapse: collapse; max-width: 1000px; margin: auto; }
-            th { text-align: left; color: #888; border-bottom: 1px solid #333; padding: 10px; font-size: 0.8rem; text-transform: uppercase; }
-            td { padding: 15px 10px; border-bottom: 1px solid #222; vertical-align: middle; }
-            .date-cell { color: #00f2ff; font-weight: bold; width: 100px; }
-            .venue-cell { color: #ccc; font-size: 0.9rem; }
-            .lineup-cell { font-weight: bold; font-size: 1rem; }
-            .link-cell a { color: #a855f7; text-decoration: none; font-weight: bold; margin-right: 15px; }
-            .cal-link { color: #555 !important; font-size: 0.8rem; }
-            tr:hover { background: #1a1a1a; }
+            body { background-color: #0d0d0d; color: #ffffff; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+            h1 { text-align: center; font-weight: 800; font-size: 2.2rem; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; max-width: 900px; margin: auto; background: #161616; border-radius: 12px; overflow: hidden; }
+            th { text-align: left; color: #777; border-bottom: 2px solid #222; padding: 15px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+            td { padding: 18px 15px; border-bottom: 1px solid #222; vertical-align: middle; }
+            .date-cell { color: #00f2ff; font-weight: 700; width: 100px; }
+            .lineup-cell { font-weight: 600; font-size: 1.05rem; }
+            .venue-cell { color: #aaa; font-size: 0.9rem; font-style: italic; }
+            .link-cell a { text-decoration: none; font-weight: bold; padding: 6px 10px; border-radius: 6px; transition: 0.2s; display: inline-block; }
+            .btn-ticket { color: #a855f7; border: 1px solid #a855f7; margin-bottom: 5px; }
+            .btn-ticket:hover { background: #a855f7; color: white; }
+            .btn-cal { color: #555; border: 1px solid #333; font-size: 0.75rem; margin-left: 5px; }
+            .btn-cal:hover { border-color: #555; color: #ccc; }
+            tr:hover { background: #1e1e1e; }
         </style>
     </head>
     <body>
         <h1>🤘 ATL Show Finder</h1>
-        <div class="search-container">
-            <input type="text" placeholder="Search bands..." style="width: 45%; padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 5px;">
-            <select style="width: 45%; padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 5px; float: right;">
-                <option>All Venues</option>
-            </select>
-        </div>
         <table>
             <thead>
                 <tr>
                     <th>Date</th>
                     <th>Lineup</th>
                     <th>Venue</th>
-                    <th>Link</th>
+                    <th>Links</th>
                 </tr>
             </thead>
             <tbody>
@@ -307,7 +304,7 @@ def build_web_page():
     
     rows = ""
     for e in events:
-        # Create ICS link
+        # Prepare Calendar Link
         clean_name = e.name.replace("/", "-")
         ics_body = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nSUMMARY:{clean_name}\\nDTSTART:{e.date_time.strftime('%Y%m%d')}T200000\\nLOCATION:{e.venue_name}\\nEND:VEVENT\\nEND:VCALENDAR"
         cal_uri = f"data:text/calendar;charset=utf8,{urllib.parse.quote(ics_body)}"
@@ -318,14 +315,15 @@ def build_web_page():
                     <td class="lineup-cell">{e.name}</td>
                     <td class="venue-cell">{e.venue_name}</td>
                     <td class="link-cell">
-                        <a href="{e.ticket_url}" target="_blank">Tickets</a>
-                        <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="cal-link">📅 Cal</a>
+                        <a href="{e.ticket_url}" target="_blank" class="btn-ticket">Tickets</a>
+                        <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="btn-cal">📅 Cal</a>
                     </td>
                 </tr>
         """
         
-    html_end = "</tbody></table></body></html>"
+    html_end = "</tbody></table><p style='text-align:center; color:#444; margin-top:30px;'>Auto-updated every 24 hours</p></body></html>"
     
+    # THIS LINE OVERWRITES YOUR index.html EVERY TIME
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html_start + rows + html_end)
     db.close()
@@ -334,7 +332,6 @@ def clean_and_sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("[*] Syncing data...")
         tm_list = fetch_ticketmaster()
         db.query(Event).delete()
         today = date.today()
@@ -353,7 +350,7 @@ def clean_and_sync():
                     db.add(Event(tm_id=f"man-{venue[:3].lower()}-{item['date']}", name=item['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "https://freshtix.com")))
         db.commit()
         build_web_page()
-        print("[+] index.html updated. No more 'Verified' tags!")
+        print("[+] Success! Verified badges removed. Calendar links added.")
     finally:
         db.close()
 
