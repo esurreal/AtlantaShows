@@ -28,7 +28,11 @@ MASQ = "The Masquerade"
 T_WEST = "Terminal West"
 VARIETY = "Variety Playhouse"
 
-# VERIFIED LIST: The master manual database
+# Center Stage rooms (Ticketmaster only)
+CENTER_STAGE = "Center Stage Theater"
+LOFT = "The Loft at Center Stage"
+VINYL = "Vinyl at Center Stage"
+
 VERIFIED_DATA = {
     V529: [
         {"date": "2026-01-03", "name": "Edwin & My Folks / Rahbi"},
@@ -234,15 +238,22 @@ VERIFIED_DATA = {
 def fetch_ticketmaster():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&city=Atlanta&classificationName=music&size=100"
-    try:
-        r = requests.get(url)
-        data = r.json()
-        return [{
-            "id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'],
-            "venue": e['_embedded']['venues'][0]['name'], "url": e['url']
-        } for e in data.get('_embedded', {}).get('events', [])]
-    except: return []
+    # Fetch from Ticketmaster using Venue IDs to get specific rooms (Center Stage)
+    venue_ids = ["KovZpZAFF1tA", "KovZpZAEA71A", "KovZpZAEA7vA"] 
+    results = []
+    for v_id in venue_ids:
+        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&venueId={v_id}&size=50"
+        try:
+            r = requests.get(url)
+            data = r.json()
+            events = data.get('_embedded', {}).get('events', [])
+            for e in events:
+                results.append({
+                    "id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'],
+                    "venue": e['_embedded']['venues'][0]['name'], "url": e['url']
+                })
+        except: continue
+    return results
 
 def clean_and_sync():
     Base.metadata.create_all(bind=engine)
@@ -253,13 +264,18 @@ def clean_and_sync():
         db.query(Event).delete()
         today = date.today()
 
+        # Add TM results ONLY if they aren't for one of your manual venues
         for e in tm_list:
             event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if event_date < today: continue
-            if any(v.lower() in e['venue'].lower() for v in ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]):
+            
+            # Skip if the TM venue matches your manually tracked venues
+            if any(v.lower() in e['venue'].lower() for v in ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse", "masquerade"]):
                 continue
+            
             db.add(Event(tm_id=e['id'], name=e['name'], date_time=event_date, venue_name=e['venue'], ticket_url=e['url']))
         
+        # Add your VERIFIED data
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
@@ -279,7 +295,7 @@ def clean_and_sync():
                     name=item['name'], date_time=dt, venue_name=venue, ticket_url=link
                 ))
         db.commit()
-        print(f"[+] Sync complete! Variety Playhouse: {len(VERIFIED_DATA[VARIETY])} shows added.")
+        print(f"[+] Sync complete!")
     finally:
         db.close()
 
