@@ -15,11 +15,13 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
+# Database Configuration
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" in raw_db_url else raw_db_url
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
+# Venue Constants
 BOGGS = "Boggs Social & Supply"
 EARL = "The EARL"
 V529 = "529"
@@ -234,30 +236,42 @@ VERIFIED_DATA = {
 
 def fetch_ticketmaster():
     api_key = os.getenv("TM_API_KEY")
-    if not api_key: return []
+    if not api_key: 
+        print("[!] No TM_API_KEY found in environment variables.")
+        return []
     
-    venue_ids = [
-        "KovZpZAJ67eA", "KovZpZAJ67lA", "KovZpZAJ671A", # Masquerade Rooms
-        "KovZpZAFF1tA", "KovZpZAEA71A", "KovZpZAEA7vA", # Center Stage / Loft / Vinyl
-        "KovZpZAEk7IA", "KovZpZAE6eEA", "KovZpZAEkAaA", # Buckhead / Roxy / Chastain
-        "KovZpZAFFdlA", "KovZpZAEk6vA"                 # Ameris / Lakewood
+    # We use a mix of specific keywords to catch sub-rooms and main stages
+    search_queries = [
+        {"keyword": "The Masquerade", "city": "Atlanta"},
+        {"keyword": "Center Stage", "city": "Atlanta"},
+        {"keyword": "The Loft", "city": "Atlanta"},
+        {"keyword": "Vinyl", "city": "Atlanta"},
+        {"keyword": "Tabernacle", "city": "Atlanta"},
+        {"keyword": "Buckhead Theatre", "city": "Atlanta"},
+        {"keyword": "Coca-Cola Roxy", "city": "Atlanta"}
     ]
-    results = []
     
-    for v_id in venue_ids:
-        # Increased size to 100 to make sure we don't miss music dates
-        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&venueId={v_id}&classificationName=music&size=100"
+    results = []
+    seen_ids = set()
+    
+    for query in search_queries:
+        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={query['keyword']}&city={query['city']}&classificationName=music&size=100"
         try:
             r = requests.get(url)
             data = r.json()
             events = data.get('_embedded', {}).get('events', [])
             for e in events:
-                results.append({
-                    "id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'],
-                    "venue": e['_embedded']['venues'][0]['name'], "url": e['url']
-                })
+                if e['id'] not in seen_ids:
+                    results.append({
+                        "id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'],
+                        "venue": e['_embedded']['venues'][0]['name'], "url": e['url']
+                    })
+                    seen_ids.add(e['id'])
+            # Sleep briefly to respect the 5-call-per-second limit
             time.sleep(0.3) 
-        except: continue
+        except Exception as err:
+            print(f"[!] Error fetching {query['keyword']}: {err}")
+            continue
     return results
 
 def clean_and_sync():
@@ -269,17 +283,19 @@ def clean_and_sync():
         db.query(Event).delete()
         today = date.today()
 
+        # Process API results
         for e in tm_list:
             event_date = datetime.strptime(e['date'], "%Y-%m-%d").date()
             if event_date < today: continue
             
-            # Safeguard expanded to prevent double-counting if TM lists manual venues
+            # Prevent double-counting if TM lists our manual venues
             manual_venues = ["529", "boggs", "the earl", "culture shock", "the eastern", "terminal west", "variety playhouse"]
             if any(v.lower() in e['venue'].lower() for v in manual_venues):
                 continue
             
             db.add(Event(tm_id=e['id'], name=e['name'], date_time=event_date, venue_name=e['venue'], ticket_url=e['url']))
         
+        # Add the manual/verified data
         for venue, shows in VERIFIED_DATA.items():
             link = "https://www.freshtix.com"
             if venue == V529: link = "https://529atlanta.com/calendar/"
