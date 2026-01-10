@@ -254,6 +254,8 @@ def fetch_tm():
         except: continue
     return res
 
+# ... (Keep your imports and VERIFIED_DATA exactly as they are) ...
+
 def build_web_page():
     db = SessionLocal()
     events = db.query(Event).order_by(Event.date_time).all()
@@ -279,17 +281,24 @@ def build_web_page():
         with open("index.html", "r", encoding="utf-8") as f:
             full_content = f.read()
         
+        # Use a specific marker to avoid messing up the file
         if "" in full_content:
             new_content = full_content.replace("", rows_html)
             with open("index.html", "w", encoding="utf-8") as f:
                 f.write(new_content)
-            print("[+] Site updated with manual shows and clean styling.")
+            print("[+] Site updated with clean styling.")
         else:
-            print("[!] Error: '' tag not found in index.html")
+            # Fallback if the placeholder is missing: find the tbody
+            if "<tbody>" in full_content:
+                new_content = full_content.replace("<tbody>", f"<tbody>{rows_html}")
+                with open("index.html", "w", encoding="utf-8") as f:
+                    f.write(new_content)
     except Exception as ex:
         print(f"[!] Error: {ex}")
     finally:
         db.close()
+
+# ... (Rest of your sync() function remains the same) ...
 
 def sync():
     Base.metadata.create_all(bind=engine)

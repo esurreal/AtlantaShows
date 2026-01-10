@@ -42,7 +42,6 @@ def read_root():
             if e.date_time < today: continue
             
             v_display = e.venue_name
-            # Dropdown Grouping
             if "Masquerade" in v_display: v_dropdown = "The Masquerade"
             elif any(x in v_display for x in ["Center Stage", "The Loft", "Vinyl"]): v_dropdown = "Center Stage / Loft / Vinyl"
             else: v_dropdown = v_display
@@ -63,13 +62,14 @@ def read_root():
             safe_id = f"{event_date.isoformat()}-{venue.replace(' ', '-').lower()}"
             filter_venue = "The Masquerade" if "Masquerade" in venue else ("Center Stage / Loft / Vinyl" if any(x in venue for x in ["Center Stage", "The Loft", "Vinyl"]) else venue)
             
+            # Subtle gray badge instead of purple box
             badge = '<span class="manual-badge">Verified</span>' if data["is_manual"] else ""
             
             rows += f"""
             <tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_venue}">
                 <td><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
-                <td class="name-cell"><strong>{full_lineup}</strong> {badge}</td>
+                <td class="lineup-cell"><strong>{full_lineup}</strong> {badge}</td>
                 <td class="venue-cell">{venue}</td>
                 <td><a href="{data['link']}" target="_blank" class="ticket-link">Tickets</a></td>
             </tr>
@@ -80,34 +80,57 @@ def read_root():
         <html>
             <head>
                 <meta charset="UTF-8">
-                <title>ATL Show Finder</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>🤘 ATL Show Finder</title>
                 <style>
-                    :root {{ --bg: #121212; --text: #ffffff; --primary: #bb86fc; --gold: #fbc02d; --row-hover: #252525; --highlight-bg: #2d2a16; }}
-                    body {{ font-family: -apple-system, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; }}
+                    :root {{ 
+                        --bg: #fcfcfc; 
+                        --card-bg: #ffffff;
+                        --text: #444444; 
+                        --text-light: #888888;
+                        --primary: #007aff; 
+                        --gold: #fbc02d; 
+                        --row-hover: #f5f5f5; 
+                        --highlight-bg: #fffdeb; 
+                        --border: #eeeeee;
+                    }}
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; }}
                     .container {{ max-width: 1000px; margin: auto; }}
-                    header {{ text-align: center; padding: 20px 0; }}
-                    .controls-box {{ background: #1e1e1e; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333; }}
+                    header {{ text-align: center; padding: 30px 0; }}
+                    h1 {{ letter-spacing: -1px; color: #222; }}
+                    
+                    .controls-box {{ background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
                     .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
-                    input#search, select#venue-select {{ padding: 15px; background: #222; border: 1px solid #444; color: white; border-radius: 8px; font-size: 1rem; flex-grow: 1; }}
+                    input#search, select#venue-select {{ padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 1rem; flex-grow: 1; }}
+                    
                     .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }}
                     .btn-group {{ display: flex; gap: 5px; }}
-                    .tab-btn, .fav-toggle {{ background: #333; color: white; border: 1px solid #444; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9rem; }}
-                    .tab-btn.active {{ background: var(--primary); color: black; }}
-                    .fav-toggle.active {{ background: var(--gold); color: black; }}
-                    .nav-controls {{ display: flex; align-items: center; gap: 15px; }}
-                    .view-label {{ font-weight: bold; color: #00ffcc; min-width: 120px; text-align: center; }}
-                    .manual-badge {{ font-size: 0.65rem; color: #bb86fc; border: 1px solid #bb86fc; padding: 1px 5px; border-radius: 4px; margin-left: 8px; vertical-align: middle; text-transform: uppercase; }}
-                    table {{ width: 100%; border-collapse: collapse; }}
-                    th {{ text-align: left; border-bottom: 2px solid #333; padding: 10px; color: #888; font-size: 0.8rem; }}
-                    td {{ padding: 15px 10px; border-bottom: 1px solid #333; }}
+                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: 0.2s; }}
+                    .tab-btn.active {{ background: #444; color: white; }}
+                    .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
+                    
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 120px; text-align: center; }}
+                    .manual-badge {{ font-size: 0.6rem; color: #999; border: 1px solid #ddd; padding: 2px 6px; border-radius: 4px; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.5px; }}
+                    
+                    table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
+                    th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }}
+                    td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
+                    
                     .event-row:hover {{ background: var(--row-hover); }}
                     .is-highlighted {{ background: var(--highlight-bg) !important; border-left: 4px solid var(--gold); }}
-                    .star-btn {{ background: none; border: none; color: #444; font-size: 1.5rem; cursor: pointer; }}
+                    .star-btn {{ background: none; border: none; color: #ddd; font-size: 1.4rem; cursor: pointer; transition: 0.2s; }}
+                    .star-btn:hover {{ color: #bbb; }}
                     .is-highlighted .star-btn {{ color: var(--gold) !important; }}
-                    .date-cell {{ color: #00ffcc; font-weight: bold; }}
+                    
+                    .date-cell {{ color: #666; font-weight: 700; white-space: nowrap; }}
+                    .lineup-cell {{ font-size: 1.05rem; color: #222; }}
+                    .venue-cell {{ color: var(--text-light); font-size: 0.9rem; }}
                     .ticket-link {{ color: var(--primary); text-decoration: none; font-weight: bold; }}
+                    .ticket-link:hover {{ text-decoration: underline; }}
+                    
                     .hidden {{ display: none !important; }}
-                    .clear-link {{ color: #666; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; }}
+                    .clear-link {{ color: #bbb; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; }}
+                    .clear-link:hover {{ color: #888; }}
                 </style>
             </head>
             <body>
@@ -115,7 +138,7 @@ def read_root():
                 <div class="container">
                     <div class="controls-box">
                         <div class="search-row">
-                            <input type="text" id="search" placeholder="Search bands...">
+                            <input type="text" id="search" placeholder="Search bands or venues...">
                             <select id="venue-select">{venue_options}</select>
                         </div>
                         <div class="filter-bar">
@@ -126,9 +149,9 @@ def read_root():
                                 <button id="fav-filter" class="fav-toggle">STARRED ★</button>
                             </div>
                             <div id="nav-group" class="nav-controls hidden">
-                                <button onclick="moveDate(-1)">←</button>
+                                <button class="tab-btn" onclick="moveDate(-1)">←</button>
                                 <span id="view-label" class="view-label"></span>
-                                <button onclick="moveDate(1)">→</button>
+                                <button class="tab-btn" onclick="moveDate(1)">→</button>
                             </div>
                         </div>
                         <span class="clear-link" id="clear-btn">Clear All Stars</span>
@@ -174,6 +197,7 @@ def read_root():
                     }}
 
                     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
+                        if (!e.target.dataset.filter) return;
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active');
                         currentTab = e.target.dataset.filter;
@@ -200,7 +224,7 @@ def read_root():
                     }});
 
                     document.getElementById('clear-btn').onclick = () => {{
-                        if(confirm("Clear all?")) {{ localStorage.removeItem('atl_stars'); location.reload(); }}
+                        if(confirm("Clear all starred shows?")) {{ localStorage.removeItem('atl_stars'); location.reload(); }}
                     }};
 
                     (JSON.parse(localStorage.getItem('atl_stars')) || []).forEach(id => {{
