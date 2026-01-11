@@ -1,3 +1,4 @@
+
 import os
 import subprocess
 from fastapi import FastAPI
@@ -76,7 +77,7 @@ def read_root():
         <html>
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
                 <title>🤘 ATL Show Finder</title>
                 <style>
                     :root {{ 
@@ -100,9 +101,10 @@ def read_root():
                     .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-direction: column; }}
                     @media(min-width: 600px) {{ .search-row {{ flex-direction: row; }} }}
 
+                    /* Font-size 16px prevents iOS from auto-zooming on tap */
                     input#search, select#venue-select {{ 
                         padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); 
-                        border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; -webkit-appearance: none;
+                        border-radius: 8px; font-size: 16px; width: 100%; box-sizing: border-box; outline: none; -webkit-appearance: none;
                     }}
                     input#search:focus {{ border-color: var(--primary); }}
                     
@@ -124,7 +126,7 @@ def read_root():
                     .view-label {{ font-weight: bold; color: var(--primary); min-width: 100px; text-align: center; font-size: 0.9rem; }}
                     
                     .table-wrapper {{ overflow-x: auto; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
-                    table {{ width: 100%; border-collapse: collapse; min-width: 500px; }}
+                    table {{ width: 100%; border-collapse: collapse; min-width: 480px; }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 12px 10px; color: #999; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; }}
                     td {{ padding: 12px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }}
                     
@@ -135,7 +137,7 @@ def read_root():
                     .star-btn {{ background: none; border: none; color: #eee; font-size: 1.4rem; cursor: pointer; transition: 0.2s; padding: 0; }}
                     .is-highlighted .star-btn {{ color: var(--gold) !important; }}
                     
-                    .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 90px; font-size: 0.85rem; }}
+                    .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 85px; font-size: 0.85rem; }}
                     .lineup-cell {{ font-size: 0.95rem; color: #333; }}
                     .venue-cell {{ color: var(--text-light); font-size: 0.85rem; }}
                     .link-cell {{ text-align: right; }}
@@ -144,11 +146,12 @@ def read_root():
                     @media(max-width: 500px) {{
                         .venue-cell {{ font-size: 0.75rem; }}
                         .lineup-cell {{ font-size: 0.9rem; }}
-                        td {{ padding: 10px 5px; }}
+                        td {{ padding: 10px 8px; }}
+                        h1 {{ font-size: 1.5rem; }}
                     }}
 
                     .hidden {{ display: none !important; }}
-                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; text-align: center; width: 100%; }}
+                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin: 10px 0; display: block; text-decoration: none; text-align: center; }}
                 </style>
             </head>
             <body>
@@ -198,10 +201,8 @@ def read_root():
                             let showRow = false;
 
                             if (starredOnly) {{
-                                // In Starred Mode: show if starred AND matches search/venue
                                 showRow = isStarred && txtM && venM;
                             }} else {{
-                                // In Regular Tabs: show if matches date AND matches search/venue
                                 let dateM = currentTab === 'all' || 
                                     (currentTab === 'today' && rDate.toDateString() === viewingDate.toDateString()) ||
                                     (currentTab === 'month' && rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear());
@@ -215,7 +216,6 @@ def read_root():
 
                     function updateLabel() {{
                         const nav = document.getElementById('nav-group'), lbl = document.getElementById('view-label');
-                        // Hide nav controls if in Starred Mode or "All" tab
                         if (currentTab === 'all' || starredOnly) nav.classList.add('hidden');
                         else {{
                             nav.classList.remove('hidden');
@@ -229,34 +229,24 @@ def read_root():
                         runFilters();
                     }}
 
-                    // Handle Tab Buttons (All, Monthly, Daily)
                     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
                         if (!e.target.dataset.filter) return;
-                        
-                        // Turn OFF Starred Mode when a tab is clicked
                         starredOnly = false;
                         document.getElementById('fav-filter').classList.remove('active');
-                        
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active');
                         currentTab = e.target.dataset.filter;
                         runFilters();
                     }}));
 
-                    // Handle Starred Toggle
                     document.getElementById('fav-filter').onclick = function() {{
                         starredOnly = !starredOnly;
                         this.classList.toggle('active');
-                        
-                        // If turning Starred ON, we visually "deactivate" the active tab highlight 
-                        // but keep the currentTab variable stored for when we switch back.
                         if (starredOnly) {{
                             document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         }} else {{
-                            // Turning Starred OFF: Restore the highlight to the active tab
                             document.querySelector(`[data-filter="${{currentTab}}"]`).classList.add('active');
                         }}
-                        
                         runFilters();
                     }};
 
