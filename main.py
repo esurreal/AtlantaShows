@@ -63,11 +63,11 @@ def read_root():
             
             rows += f"""
             <tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_venue}">
-                <td><button class="star-btn" data-id="{safe_id}">★</button></td>
+                <td class="star-cell"><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
                 <td class="lineup-cell"><strong>{full_lineup}</strong></td>
                 <td class="venue-cell">{venue}</td>
-                <td><a href="{data['link']}" target="_blank" class="ticket-link">Tickets</a></td>
+                <td class="link-cell"><a href="{data['link']}" target="_blank" class="ticket-link">Tickets</a></td>
             </tr>
             """
 
@@ -76,7 +76,7 @@ def read_root():
         <html>
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                 <title>🤘 ATL Show Finder</title>
                 <style>
                     :root {{ 
@@ -90,42 +90,65 @@ def read_root():
                         --highlight-bg: #fffdeb; 
                         --border: #eeeeee;
                     }}
-                    body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; }}
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 10px; line-height: 1.4; }}
                     .container {{ max-width: 1000px; margin: auto; }}
-                    header {{ text-align: center; padding: 30px 0; }}
-                    h1 {{ letter-spacing: -1px; color: #222; margin-bottom: 5px; }}
+                    header {{ text-align: center; padding: 20px 0; }}
+                    h1 {{ letter-spacing: -1px; color: #222; margin: 0; font-size: 1.8rem; }}
                     
-                    .controls-box {{ background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
-                    .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
-                    input#search, select#venue-select {{ padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 1rem; flex-grow: 1; outline: none; }}
+                    .controls-box {{ background: var(--card-bg); padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
+                    
+                    .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-direction: column; }}
+                    @media(min-width: 600px) {{ .search-row {{ flex-direction: row; }} }}
+
+                    input#search, select#venue-select {{ 
+                        padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); 
+                        border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; -webkit-appearance: none;
+                    }}
                     input#search:focus {{ border-color: var(--primary); }}
                     
-                    .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }}
-                    .btn-group {{ display: flex; gap: 5px; }}
-                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: 0.2s; }}
+                    .filter-bar {{ display: flex; flex-direction: column; gap: 15px; }}
+                    @media(min-width: 600px) {{ .filter-bar {{ flex-direction: row; justify-content: space-between; align-items: center; }} }}
+
+                    .btn-group {{ display: flex; gap: 5px; flex-wrap: wrap; width: 100%; }}
+                    @media(min-width: 600px) {{ .btn-group {{ width: auto; }} }}
+
+                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.75rem; transition: 0.2s; flex-grow: 1; text-align: center; }}
+                    @media(min-width: 600px) {{ .tab-btn, .fav-toggle {{ flex-grow: 0; padding: 10px 16px; font-size: 0.8rem; }} }}
+
                     .tab-btn.active {{ background: #444; color: white; }}
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
                     
-                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 120px; text-align: center; }}
+                    .nav-controls {{ display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }}
+                    @media(min-width: 600px) {{ .nav-controls {{ width: auto; }} }}
+
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 100px; text-align: center; font-size: 0.9rem; }}
                     
-                    table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
-                    th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }}
-                    td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
+                    .table-wrapper {{ overflow-x: auto; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
+                    table {{ width: 100%; border-collapse: collapse; min-width: 500px; }}
+                    th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 12px 10px; color: #999; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; }}
+                    td {{ padding: 12px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }}
                     
                     .event-row:hover {{ background: var(--row-hover); }}
                     .is-highlighted {{ background: var(--highlight-bg) !important; border-left: 4px solid var(--gold); }}
+                    
+                    .star-cell {{ width: 30px; text-align: center; }}
                     .star-btn {{ background: none; border: none; color: #eee; font-size: 1.4rem; cursor: pointer; transition: 0.2s; padding: 0; }}
-                    .star-btn:hover {{ color: #ccc; }}
                     .is-highlighted .star-btn {{ color: var(--gold) !important; }}
                     
-                    .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 110px; }}
-                    .lineup-cell {{ font-size: 1.05rem; color: #333; }}
-                    .venue-cell {{ color: var(--text-light); font-size: 0.9rem; }}
-                    .ticket-link {{ color: var(--primary); text-decoration: none; font-weight: bold; }}
+                    .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 90px; font-size: 0.85rem; }}
+                    .lineup-cell {{ font-size: 0.95rem; color: #333; }}
+                    .venue-cell {{ color: var(--text-light); font-size: 0.85rem; }}
+                    .link-cell {{ text-align: right; }}
+                    .ticket-link {{ color: var(--primary); text-decoration: none; font-weight: bold; font-size: 0.9rem; }}
                     
+                    @media(max-width: 500px) {{
+                        .venue-cell {{ font-size: 0.75rem; }}
+                        .lineup-cell {{ font-size: 0.9rem; }}
+                        td {{ padding: 10px 5px; }}
+                    }}
+
                     .hidden {{ display: none !important; }}
-                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; }}
-                    .clear-link:hover {{ color: #999; }}
+                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; text-align: center; width: 100%; }}
                 </style>
             </head>
             <body>
@@ -133,7 +156,7 @@ def read_root():
                 <div class="container">
                     <div class="controls-box">
                         <div class="search-row">
-                            <input type="text" id="search" placeholder="Search bands or venues...">
+                            <input type="text" id="search" placeholder="Search bands or venues..." inputmode="search">
                             <select id="venue-select">{venue_options}</select>
                         </div>
                         <div class="filter-bar">
@@ -151,10 +174,12 @@ def read_root():
                         </div>
                         <span class="clear-link" id="clear-btn">Clear All Stars</span>
                     </div>
-                    <table>
-                        <thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
-                        <tbody id="event-body">{rows}</tbody>
-                    </table>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th style="text-align:right">Link</th></tr></thead>
+                            <tbody id="event-body">{rows}</tbody>
+                        </table>
+                    </div>
                 </div>
                 <script>
                     let currentTab = 'all', starredOnly = false, viewingDate = new Date();
@@ -163,22 +188,35 @@ def read_root():
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
+                        
                         document.querySelectorAll('.event-row').forEach(row => {{
                             const rDate = new Date(row.dataset.date + 'T00:00:00');
+                            const isStarred = row.classList.contains('is-highlighted');
                             const txtM = row.innerText.toUpperCase().includes(q);
-                            const strM = !starredOnly || row.classList.contains('is-highlighted');
                             const venM = vSel === 'all' || row.dataset.venueFilter === vSel;
-                            let dateM = currentTab === 'all' || 
-                                (currentTab === 'today' && rDate.toDateString() === viewingDate.toDateString()) ||
-                                (currentTab === 'month' && rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear());
-                            row.style.display = (txtM && strM && venM && dateM) ? "" : "none";
+                            
+                            let showRow = false;
+
+                            if (starredOnly) {{
+                                // In Starred Mode: show if starred AND matches search/venue
+                                showRow = isStarred && txtM && venM;
+                            }} else {{
+                                // In Regular Tabs: show if matches date AND matches search/venue
+                                let dateM = currentTab === 'all' || 
+                                    (currentTab === 'today' && rDate.toDateString() === viewingDate.toDateString()) ||
+                                    (currentTab === 'month' && rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear());
+                                showRow = dateM && txtM && venM;
+                            }}
+                            
+                            row.style.display = showRow ? "" : "none";
                         }});
                         updateLabel();
                     }}
 
                     function updateLabel() {{
                         const nav = document.getElementById('nav-group'), lbl = document.getElementById('view-label');
-                        if (currentTab === 'all') nav.classList.add('hidden');
+                        // Hide nav controls if in Starred Mode or "All" tab
+                        if (currentTab === 'all' || starredOnly) nav.classList.add('hidden');
                         else {{
                             nav.classList.remove('hidden');
                             lbl.innerText = currentTab === 'today' ? viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}});
@@ -191,19 +229,38 @@ def read_root():
                         runFilters();
                     }}
 
+                    // Handle Tab Buttons (All, Monthly, Daily)
                     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
                         if (!e.target.dataset.filter) return;
+                        
+                        // Turn OFF Starred Mode when a tab is clicked
+                        starredOnly = false;
+                        document.getElementById('fav-filter').classList.remove('active');
+                        
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active');
                         currentTab = e.target.dataset.filter;
                         runFilters();
                     }}));
 
+                    // Handle Starred Toggle
                     document.getElementById('fav-filter').onclick = function() {{
-                        starredOnly = !starredOnly; this.classList.toggle('active'); runFilters();
+                        starredOnly = !starredOnly;
+                        this.classList.toggle('active');
+                        
+                        // If turning Starred ON, we visually "deactivate" the active tab highlight 
+                        // but keep the currentTab variable stored for when we switch back.
+                        if (starredOnly) {{
+                            document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+                        }} else {{
+                            // Turning Starred OFF: Restore the highlight to the active tab
+                            document.querySelector(`[data-filter="${{currentTab}}"]`).classList.add('active');
+                        }}
+                        
+                        runFilters();
                     }};
 
-                    document.getElementById('search').onkeyup = runFilters;
+                    document.getElementById('search').oninput = runFilters;
                     document.getElementById('venue-select').onchange = runFilters;
 
                     document.addEventListener('click', e => {{
