@@ -77,7 +77,7 @@ def read_root():
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=1000, user-scalable=yes">
-                <title>🤘 ATL Show Finder</title>
+                <title>ATL Show Finder</title>
                 <style>
                     :root {{ 
                         --bg: #fcfcfc; 
@@ -92,13 +92,23 @@ def read_root():
                     }}
                     body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; min-width: 1000px; }}
                     .container {{ max-width: 1000px; margin: auto; }}
-                    header {{ text-align: center; padding: 30px 0; }}
-                    h1 {{ letter-spacing: -1px; color: #222; margin-bottom: 5px; }}
+                    
+                    header {{ text-align: center; padding: 40px 0 30px 0; }}
+                    
+                    /* Fancier, bigger, universal serif font */
+                    h1 {{ 
+                        font-family: "Baskerville", "Baskerville Old Face", "Hoefler Text", "Garammond", "Times New Roman", serif;
+                        font-weight: 400;
+                        font-size: 3.5rem; 
+                        letter-spacing: 2px;
+                        color: #1a1a1a; 
+                        margin: 0;
+                        text-transform: uppercase;
+                    }}
                     
                     .controls-box {{ background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
                     .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; }}
                     
-                    /* Keep inputs at 16px to prevent iOS auto-zoom-jump */
                     input#search, select#venue-select {{ padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; flex-grow: 1; outline: none; }}
                     input#search:focus {{ border-color: var(--primary); }}
                     
@@ -129,7 +139,7 @@ def read_root():
                 </style>
             </head>
             <body>
-                <header><h1>🤘 ATL Show Finder</h1></header>
+                <header><h1>ATL Show Finder</h1></header>
                 <div class="container">
                     <div class="controls-box">
                         <div class="search-row">
