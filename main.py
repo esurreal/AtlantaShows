@@ -63,17 +63,11 @@ def read_root():
             
             rows += f"""
             <tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_venue}">
-                <td class="star-cell"><button class="star-btn" data-id="{safe_id}">★</button></td>
-                <td class="main-content-cell">
-                    <div class="mobile-top-row">
-                        <span class="date-text">{event_date.strftime('%a, %b %d')}</span>
-                        <span class="venue-text">{venue}</span>
-                    </div>
-                    <div class="lineup-text"><strong>{full_lineup}</strong></div>
-                </td>
-                <td class="link-cell">
-                    <a href="{data['link']}" target="_blank" class="ticket-btn">Tickets</a>
-                </td>
+                <td><button class="star-btn" data-id="{safe_id}">★</button></td>
+                <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
+                <td class="lineup-cell"><strong>{full_lineup}</strong></td>
+                <td class="venue-cell">{venue}</td>
+                <td><a href="{data['link']}" target="_blank" class="ticket-link">Tickets</a></td>
             </tr>
             """
 
@@ -82,7 +76,7 @@ def read_root():
         <html>
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+                <meta name="viewport" content="width=1000, user-scalable=yes">
                 <title>🤘 ATL Show Finder</title>
                 <style>
                     :root {{ 
@@ -96,68 +90,42 @@ def read_root():
                         --highlight-bg: #fffdeb; 
                         --border: #eeeeee;
                     }}
-                    body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 10px; line-height: 1.4; }}
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; min-width: 1000px; }}
                     .container {{ max-width: 1000px; margin: auto; }}
-                    header {{ text-align: center; padding: 20px 0; }}
-                    h1 {{ letter-spacing: -1px; color: #222; margin: 0; font-size: 1.8rem; }}
+                    header {{ text-align: center; padding: 30px 0; }}
+                    h1 {{ letter-spacing: -1px; color: #222; margin-bottom: 5px; }}
                     
-                    .controls-box {{ background: var(--card-bg); padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
+                    .controls-box {{ background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
+                    .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; }}
                     
-                    .search-row {{ display: flex; gap: 10px; margin-bottom: 15px; flex-direction: column; }}
-                    @media(min-width: 600px) {{ .search-row {{ flex-direction: row; }} }}
-
-                    input#search, select#venue-select {{ 
-                        padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); 
-                        border-radius: 8px; font-size: 16px; width: 100%; box-sizing: border-box; outline: none; -webkit-appearance: none;
-                    }}
+                    /* Keep inputs at 16px to prevent iOS auto-zoom-jump */
+                    input#search, select#venue-select {{ padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; flex-grow: 1; outline: none; }}
+                    input#search:focus {{ border-color: var(--primary); }}
                     
-                    .filter-bar {{ display: flex; flex-direction: column; gap: 15px; }}
-                    @media(min-width: 600px) {{ .filter-bar {{ flex-direction: row; justify-content: space-between; align-items: center; }} }}
-
-                    .btn-group {{ display: flex; gap: 5px; flex-wrap: wrap; width: 100%; }}
-                    @media(min-width: 600px) {{ .btn-group {{ width: auto; }} }}
-
-                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 12px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.75rem; transition: 0.2s; flex-grow: 1; text-align: center; }}
+                    .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; }}
+                    .btn-group {{ display: flex; gap: 5px; }}
+                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: 0.2s; }}
                     .tab-btn.active {{ background: #444; color: white; }}
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
                     
-                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 100px; text-align: center; font-size: 0.9rem; }}
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 120px; text-align: center; }}
                     
-                    .table-wrapper {{ background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }}
-                    table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+                    table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
+                    th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }}
+                    td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
                     
                     .event-row:hover {{ background: var(--row-hover); }}
                     .is-highlighted {{ background: var(--highlight-bg) !important; border-left: 4px solid var(--gold); }}
-                    
-                    td {{ padding: 15px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }}
-                    
-                    /* Star Column */
-                    .star-cell {{ width: 35px; text-align: center; padding-right: 0; }}
-                    .star-btn {{ background: none; border: none; color: #eee; font-size: 1.5rem; cursor: pointer; padding: 0; }}
+                    .star-btn {{ background: none; border: none; color: #eee; font-size: 1.4rem; cursor: pointer; transition: 0.2s; padding: 0; }}
                     .is-highlighted .star-btn {{ color: var(--gold) !important; }}
                     
-                    /* Main Info Column */
-                    .main-content-cell {{ width: auto; overflow: hidden; }}
-                    .mobile-top-row {{ display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.8rem; font-weight: bold; }}
-                    .date-text {{ color: #777; }}
-                    .venue-text {{ color: var(--primary); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 10px; }}
-                    .lineup-text {{ font-size: 1rem; color: #333; line-height: 1.2; word-wrap: break-word; }}
+                    .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 110px; }}
+                    .lineup-cell {{ font-size: 1.05rem; color: #333; }}
+                    .venue-cell {{ color: var(--text-light); font-size: 0.9rem; }}
+                    .ticket-link {{ color: var(--primary); text-decoration: none; font-weight: bold; }}
                     
-                    /* Link Column */
-                    .link-cell {{ width: 85px; text-align: right; }}
-                    .ticket-btn {{ 
-                        display: inline-block; background: #f0f0f0; color: var(--primary); 
-                        text-decoration: none; font-weight: bold; font-size: 0.8rem; 
-                        padding: 8px 10px; border-radius: 6px; 
-                    }}
-
-                    @media(min-width: 600px) {{
-                        .lineup-text {{ font-size: 1.1rem; }}
-                        .ticket-btn {{ padding: 10px 15px; }}
-                    }}
-
                     .hidden {{ display: none !important; }}
-                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin: 15px 0; display: block; text-decoration: none; text-align: center; }}
+                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; }}
                 </style>
             </head>
             <body>
@@ -183,11 +151,10 @@ def read_root():
                         </div>
                         <span class="clear-link" id="clear-btn">Clear All Stars</span>
                     </div>
-                    <div class="table-wrapper">
-                        <table>
-                            <tbody id="event-body">{rows}</tbody>
-                        </table>
-                    </div>
+                    <table>
+                        <thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
+                        <tbody id="event-body">{rows}</tbody>
+                    </table>
                 </div>
                 <script>
                     let currentTab = 'all', starredOnly = false, viewingDate = new Date();
@@ -213,6 +180,7 @@ def read_root():
                                     (currentTab === 'month' && rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear());
                                 showRow = dateM && txtM && venM;
                             }}
+                            
                             row.style.display = showRow ? "" : "none";
                         }});
                         updateLabel();
