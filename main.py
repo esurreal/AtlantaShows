@@ -48,10 +48,12 @@ COMMON_STYLE = """
     .bulk-row { display: flex; gap: 10px; margin-bottom: 8px; background: #f9f9f9; padding: 10px; border-radius: 8px; }
     .bulk-row input { flex: 1; padding: 8px; font-size: 14px; }
     .hidden { display: none !important; }
-    .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 15px; }
+    .manage-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; color: #999; text-transform: uppercase; font-size: 0.7rem; }
     .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
-    .del-btn { color: var(--danger); border: 1px solid var(--danger); background: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-    .del-btn:hover { background: var(--danger); color: white; }
+    .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
+    .del-btn-multi:disabled { background: #ccc; cursor: not-allowed; }
+    input[type="checkbox"] { transform: scale(1.2); cursor: pointer; }
 </style>
 """
 
@@ -171,10 +173,10 @@ def admin_page():
     manage_rows = ""
     for s in manual_shows:
         manage_rows += f"""<tr>
+            <td><input type="checkbox" class="show-check" value="{s.tm_id}" onchange="toggleBulkBtn()"></td>
             <td>{s.date_time}</td>
             <td><strong>{s.name}</strong></td>
             <td>{s.venue_name}</td>
-            <td style="text-align:right;"><button class="del-btn" onclick="deleteShow('{s.tm_id}')">Delete</button></td>
         </tr>"""
 
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title>{COMMON_STYLE}</head>
@@ -194,9 +196,15 @@ def admin_page():
             </div>
 
             <div class="controls-box">
-                <h3>Manage Manual Shows</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>Manage Manual Shows</h3>
+                    <button id="bulk-del-btn" class="del-btn-multi" disabled onclick="deleteSelected()">Delete Selected</button>
+                </div>
                 <table class="manage-table">
-                    <thead><tr><th>Date</th><th>Band</th><th>Venue</th><th></th></tr></thead>
+                    <thead><tr>
+                        <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
+                        <th>Date</th><th>Band</th><th>Venue</th>
+                    </tr></thead>
                     <tbody>{manage_rows}</tbody>
                 </table>
             </div>
@@ -236,23 +244,39 @@ def admin_page():
                 const resp = await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
                 if (resp.ok) location.reload();
             }}
-            async function deleteShow(id) {{
-                if(!confirm("Delete this show?")) return;
-                const resp = await fetch('/admin/delete/' + id, {{ method: 'DELETE' }});
+
+            function toggleSelectAll() {{
+                const checked = document.getElementById('select-all').checked;
+                document.querySelectorAll('.show-check').forEach(cb => cb.checked = checked);
+                toggleBulkBtn();
+            }}
+
+            function toggleBulkBtn() {{
+                const anyChecked = document.querySelectorAll('.show-check:checked').length > 0;
+                document.getElementById('bulk-del-btn').disabled = !anyChecked;
+            }}
+
+            async function deleteSelected() {{
+                const selected = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
+                if(!confirm(`Delete ${{selected.length}} shows?`)) return;
+                
+                const resp = await fetch('/admin/delete-bulk', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify(selected)
+                }});
                 if (resp.ok) location.reload();
             }}
         </script>
     </body></html>"""
 
-@app.delete("/admin/delete/{{tm_id}}")
-def delete_manual_show(tm_id: str):
+@app.post("/admin/delete-bulk")
+async def delete_bulk(ids: list = Body(...)):
     db = SessionLocal()
-    show = db.query(Event).filter(Event.tm_id == tm_id).first()
-    if show:
-        db.delete(show)
-        db.commit()
+    db.query(Event).filter(Event.tm_id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
     db.close()
-    return {{"status": "ok"}}
+    return {"status": "ok"}
 
 @app.post("/admin/bulk-save")
 async def bulk_save(data: list = Body(...)):
@@ -261,15 +285,15 @@ async def bulk_save(data: list = Body(...)):
     for item in data:
         try:
             name, raw_date, venue = item.get('name'), item.get('date'), item.get('venue')
-            if "/" in raw_date: dt = datetime.strptime(f"{current_year}/{{raw_date}}", "%Y/%m/%d")
-            else: dt = datetime.strptime(f"{current_year} {{raw_date}}", "%Y %b %d")
+            if "/" in raw_date: dt = datetime.strptime(f"{current_year}/{raw_date}", "%Y/%m/%d")
+            else: dt = datetime.strptime(f"{current_year} {raw_date}", "%Y %b %d")
             if dt.date() < date.today(): dt = dt.replace(year=current_year + 1)
             final_date = dt.date()
-            tm_id = f"manual-{{name.replace(' ', '')}}-{{final_date.isoformat()}}"
+            tm_id = f"manual-{name.replace(' ', '')}-{final_date.isoformat()}"
             db.merge(Event(tm_id=tm_id, name=name, date_time=final_date, venue_name=venue, ticket_url=item.get('url', '')))
         except: continue
     db.commit(); db.close()
-    return {{"status": "ok"}}
+    return {"status": "ok"}
 
 @app.post("/admin/run-collector")
 def run_collector():
