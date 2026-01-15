@@ -18,7 +18,6 @@ class Event(Base):
     venue_name = Column(String)
     ticket_url = Column(Text)
 
-# Railway-compatible Database Connection
 raw_db_url = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL", "sqlite:///shows.db")
 db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" in raw_db_url else raw_db_url
 engine = create_engine(db_url)
@@ -27,13 +26,12 @@ SessionLocal = sessionmaker(bind=engine)
 
 app = FastAPI()
 
-# Shared CSS for both Main Site and Admin
 COMMON_STYLE = """
 <style>
     :root { 
         --bg: #fcfcfc; --card-bg: #ffffff; --text: #444444; 
         --text-light: #888888; --primary: #007aff; --gold: #fbc02d; 
-        --row-hover: #f7f7f7; --highlight-bg: #fffdeb; --border: #eeeeee;
+        --row-hover: #f7f7f7; --highlight-bg: #fffdeb; --border: #eeeeee; --danger: #ff3b30;
     }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; min-width: 1000px; }
     .container { max-width: 1000px; margin: auto; }
@@ -44,12 +42,16 @@ COMMON_STYLE = """
     }
     .controls-box { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     input, select, textarea, .admin-btn { padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
-    .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; }
+    .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; }
     .admin-btn:hover { background: #222; }
     textarea { width: 100%; min-height: 150px; font-family: monospace; font-size: 14px; margin-bottom: 10px; }
     .bulk-row { display: flex; gap: 10px; margin-bottom: 8px; background: #f9f9f9; padding: 10px; border-radius: 8px; }
     .bulk-row input { flex: 1; padding: 8px; font-size: 14px; }
     .hidden { display: none !important; }
+    .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
+    .del-btn { color: var(--danger); border: 1px solid var(--danger); background: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .del-btn:hover { background: var(--danger); color: white; }
 </style>
 """
 
@@ -61,7 +63,6 @@ def read_root():
         raw_events = db.query(Event).order_by(Event.date_time).all()
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         unique_dropdown_venues = set()
-        
         for e in raw_events:
             if e.date_time < today: continue
             v_display = e.venue_name
@@ -72,7 +73,6 @@ def read_root():
             grouped_events[key]["link"] = e.ticket_url
 
         venue_options = f'<option value="all">All Venues</option>' + "".join([f'<option value="{v}">{v}</option>' for v in sorted(list(unique_dropdown_venues))])
-
         rows = ""
         for (event_date, venue), data in sorted(grouped_events.items()):
             full_lineup = " / ".join(sorted(list(data["artists"])))
@@ -164,30 +164,48 @@ def read_root():
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page():
+    db = SessionLocal()
+    manual_shows = db.query(Event).filter(Event.tm_id.like('manual-%')).order_by(Event.date_time).all()
+    db.close()
+
+    manage_rows = ""
+    for s in manual_shows:
+        manage_rows += f"""<tr>
+            <td>{s.date_time}</td>
+            <td><strong>{s.name}</strong></td>
+            <td>{s.venue_name}</td>
+            <td style="text-align:right;"><button class="del-btn" onclick="deleteShow('{s.tm_id}')">Delete</button></td>
+        </tr>"""
+
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title>{COMMON_STYLE}</head>
     <body><header><h1>Admin Panel</h1></header>
         <div class="container">
             <div class="controls-box">
                 <h3>Bulk Paste Shows</h3>
-                <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Paste text from any venue calendar below. One show per line works best.</p>
                 <textarea id="bulk-input" placeholder="Jan 16 - Atmosphere - Masquerade"></textarea>
                 <div style="display:flex; gap:10px;">
                     <input type="text" id="bulk-venue" placeholder="Default Venue (optional)" style="flex-grow:1;">
                     <button type="button" class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
                 </div>
-                
                 <div id="preview-area" class="hidden" style="margin-top:30px;">
-                    <h4 style="border-bottom:2px solid #eee; padding-bottom:10px;">Review & Finalize</h4>
                     <div id="bulk-list"></div>
                     <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%; margin-top:20px;">Upload All Shows</button>
                 </div>
-                
-                <hr style="margin:50px 0; border:0; border-top:1px solid #eee;">
-                <h3>Maintenance</h3>
-                <form action="/admin/run-collector" method="post">
-                    <button type="submit" class="admin-btn" style="background:#444;">Refresh Ticketmaster Data</button>
+            </div>
+
+            <div class="controls-box">
+                <h3>Manage Manual Shows</h3>
+                <table class="manage-table">
+                    <thead><tr><th>Date</th><th>Band</th><th>Venue</th><th></th></tr></thead>
+                    <tbody>{manage_rows}</tbody>
+                </table>
+            </div>
+
+            <div class="controls-box" style="text-align:center;">
+                <form action="/admin/run-collector" method="post" style="display:inline;">
+                    <button type="submit" class="admin-btn">Update Ticketmaster</button>
                 </form>
-                <p style="text-align:center; margin-top:20px;"><a href="/" style="font-size:0.85rem; color:var(--primary); font-weight:bold; text-decoration:none;">← Return to Live Site</a></p>
+                <a href="/" class="admin-btn" style="background:#eee; color:#666; margin-left:10px;">← Back to Site</a>
             </div>
         </div>
         <script>
@@ -197,47 +215,44 @@ def admin_page():
                 const lines = text.split('\\n').filter(l => l.trim().length > 3);
                 const list = document.getElementById('bulk-list');
                 const area = document.getElementById('preview-area');
-                
                 list.innerHTML = '';
                 lines.forEach(line => {{
-                    // Regex searches for month names or "1/15" style dates
                     const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+/i) || line.match(/\d+\/\d+/);
                     const dateStr = dateMatch ? dateMatch[0] : "";
                     const namePart = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
-                    
                     const div = document.createElement('div');
                     div.className = 'bulk-row';
-                    div.innerHTML = `
-                        <input type="text" class="b-name" value="${{namePart}}" placeholder="Band">
-                        <input type="text" class="b-date" value="${{dateStr}}" placeholder="Date">
-                        <input type="text" class="b-venue" value="${{defaultVenue}}" placeholder="Venue">
-                        <input type="text" class="b-url" placeholder="Link (Optional)">
-                    `;
+                    div.innerHTML = `<input type="text" class="b-name" value="${{namePart}}"><input type="text" class="b-date" value="${{dateStr}}"><input type="text" class="b-venue" value="${{defaultVenue}}"><input type="text" class="b-url" placeholder="Link">`;
                     list.appendChild(div);
                 }});
                 area.classList.remove('hidden');
             }}
-
             async function uploadBulk() {{
                 const rows = document.querySelectorAll('.bulk-row');
                 const payload = Array.from(rows).map(r => ({{
-                    name: r.querySelector('.b-name').value,
-                    date: r.querySelector('.b-date').value,
-                    venue: r.querySelector('.b-venue').value,
-                    url: r.querySelector('.b-url').value
+                    name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value,
+                    venue: r.querySelector('.b-venue').value, url: r.querySelector('.b-url').value
                 }}));
-
-                const resp = await fetch('/admin/bulk-save', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify(payload)
-                }});
-                
-                if (resp.ok) {{ alert("Successfully added shows!"); location.href = "/"; }}
-                else {{ alert("Error saving data."); }}
+                const resp = await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+                if (resp.ok) location.reload();
+            }}
+            async function deleteShow(id) {{
+                if(!confirm("Delete this show?")) return;
+                const resp = await fetch('/admin/delete/' + id, {{ method: 'DELETE' }});
+                if (resp.ok) location.reload();
             }}
         </script>
     </body></html>"""
+
+@app.delete("/admin/delete/{{tm_id}}")
+def delete_manual_show(tm_id: str):
+    db = SessionLocal()
+    show = db.query(Event).filter(Event.tm_id == tm_id).first()
+    if show:
+        db.delete(show)
+        db.commit()
+    db.close()
+    return {{"status": "ok"}}
 
 @app.post("/admin/bulk-save")
 async def bulk_save(data: list = Body(...)):
@@ -246,26 +261,17 @@ async def bulk_save(data: list = Body(...)):
     for item in data:
         try:
             name, raw_date, venue = item.get('name'), item.get('date'), item.get('venue')
-            # Handle MM/DD or "Month DD"
-            if "/" in raw_date:
-                dt = datetime.strptime(f"{current_year}/{raw_date}", "%Y/%m/%d")
-            else:
-                dt = datetime.strptime(f"{current_year} {raw_date}", "%Y %b %d")
-            
-            # Roll over to next year if date has already passed
+            if "/" in raw_date: dt = datetime.strptime(f"{current_year}/{{raw_date}}", "%Y/%m/%d")
+            else: dt = datetime.strptime(f"{current_year} {{raw_date}}", "%Y %b %d")
             if dt.date() < date.today(): dt = dt.replace(year=current_year + 1)
-            
             final_date = dt.date()
-            tm_id = f"manual-{name.replace(' ', '')}-{final_date.isoformat()}"
+            tm_id = f"manual-{{name.replace(' ', '')}}-{{final_date.isoformat()}}"
             db.merge(Event(tm_id=tm_id, name=name, date_time=final_date, venue_name=venue, ticket_url=item.get('url', '')))
         except: continue
-            
-    db.commit()
-    db.close()
+    db.commit(); db.close()
     return {{"status": "ok"}}
 
 @app.post("/admin/run-collector")
 def run_collector():
-    if os.path.exists("collector.py"):
-        subprocess.Popen(["python", "collector.py"])
+    if os.path.exists("collector.py"): subprocess.Popen(["python", "collector.py"])
     return RedirectResponse(url="/admin", status_code=303)
