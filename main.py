@@ -26,6 +26,15 @@ SessionLocal = sessionmaker(bind=engine)
 
 app = FastAPI()
 
+# Path to your favicon file
+FAVICON_PATH = "atlshowFavicon.png"
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    if os.path.exists(FAVICON_PATH):
+        return FileResponse(FAVICON_PATH)
+    return None
+
 COMMON_STYLE = """
 <style>
     :root { 
