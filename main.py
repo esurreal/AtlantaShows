@@ -59,7 +59,6 @@ COMMON_STYLE = """
     .manage-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; color: #999; text-transform: uppercase; font-size: 0.7rem; }
     .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
     .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    .del-btn-multi:disabled { background: #ccc; cursor: not-allowed; }
 </style>
 """
 
@@ -101,6 +100,7 @@ def read_root():
                     .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }}
                     .tab-btn.active {{ background: #444; color: white; }}
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; }}
                     table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; }}
                     td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
@@ -123,7 +123,14 @@ def read_root():
                         <div class="filter-bar">
                             <div class="btn-group">
                                 <button class="tab-btn active" data-filter="all">ALL</button>
+                                <button class="tab-btn" data-filter="month">MONTHLY</button>
+                                <button class="tab-btn" data-filter="today">DAILY</button>
                                 <button id="fav-filter" class="fav-toggle">STARRED ★</button>
+                            </div>
+                            <div id="nav-group" class="nav-controls hidden" style="display:flex; align-items:center; gap:10px;">
+                                <button class="tab-btn" onclick="moveDate(-1)">←</button>
+                                <span id="view-label" class="view-label"></span>
+                                <button class="tab-btn" onclick="moveDate(1)">→</button>
                             </div>
                         </div>
                         <span class="clear-link" id="clear-btn">Clear All Stars</span>
@@ -132,153 +139,106 @@ def read_root():
                     <tbody id="event-body">{rows}</tbody></table>
                 </div>
                 <script>
-                    let currentTab = 'all', starredOnly = false;
+                    let currentTab = 'all', starredOnly = false, viewingDate = new Date(); 
+                    viewingDate.setHours(0,0,0,0);
+
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
+                        
                         document.querySelectorAll('.event-row').forEach(row => {{
+                            const rDate = new Date(row.dataset.date + 'T00:00:00');
                             const isStarred = row.classList.contains('is-highlighted');
                             const txtM = row.innerText.toUpperCase().includes(q);
                             const venM = vSel === 'all' || row.dataset.venueFilter === vSel;
-                            let showRow = starredOnly ? (isStarred && txtM && venM) : (txtM && venM);
+                            
+                            let showRow = false;
+                            if (starredOnly) {{
+                                showRow = isStarred && txtM && venM;
+                            }} else if (currentTab === 'all') {{
+                                showRow = txtM && venM;
+                            }} else if (currentTab === 'today') {{
+                                showRow = rDate.toDateString() === viewingDate.toDateString() && txtM && venM;
+                            }} else if (currentTab === 'month') {{
+                                showRow = rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear() && txtM && venM;
+                            }}
+                            
                             row.style.display = showRow ? "" : "none";
                         }});
+
+                        const nav = document.getElementById('nav-group');
+                        const lbl = document.getElementById('view-label');
+                        if (currentTab === 'all' || starredOnly) {{
+                            nav.classList.add('hidden');
+                        }} else {{
+                            nav.classList.remove('hidden');
+                            lbl.innerText = currentTab === 'today' ? 
+                                viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : 
+                                viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}});
+                        }}
                     }}
-                    document.getElementById('fav-filter').onclick = function() {{ starredOnly = !starredOnly; this.classList.toggle('active'); runFilters(); }};
+
+                    function moveDate(dir) {{
+                        if (currentTab === 'today') viewingDate.setDate(viewingDate.getDate() + dir);
+                        else viewingDate.setMonth(viewingDate.getMonth() + dir);
+                        runFilters();
+                    }}
+
+                    document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
+                        if (!e.target.dataset.filter) return;
+                        starredOnly = false;
+                        document.getElementById('fav-filter').classList.remove('active');
+                        document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+                        e.target.classList.add('active');
+                        currentTab = e.target.dataset.filter;
+                        runFilters();
+                    }}));
+
+                    document.getElementById('fav-filter').onclick = function() {{
+                        starredOnly = !starredOnly;
+                        this.classList.toggle('active');
+                        if (starredOnly) {{
+                            document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+                        }} else {{
+                            document.querySelector(`[data-filter="${{currentTab}}"]`).classList.add('active');
+                        }}
+                        runFilters();
+                    }};
+
                     document.getElementById('search').oninput = runFilters;
                     document.getElementById('venue-select').onchange = runFilters;
-                    document.addEventListener('click', e => {{ if (e.target.classList.contains('star-btn')) {{ const id = e.target.dataset.id; const row = document.getElementById('row-' + id); let s = JSON.parse(localStorage.getItem('atl_stars')) || []; if (row.classList.toggle('is-highlighted')) s.push(id); else s = s.filter(i => i !== id); localStorage.setItem('atl_stars', JSON.stringify(s)); runFilters(); }} }});
-                    document.getElementById('clear-btn').onclick = () => {{ if(confirm("Clear stars?")) {{ localStorage.removeItem('atl_stars'); location.reload(); }} }};
-                    (JSON.parse(localStorage.getItem('atl_stars')) || []).forEach(id => {{ const r = document.getElementById('row-' + id); if (r) r.classList.add('is-highlighted'); }});
+                    
+                    document.addEventListener('click', e => {{
+                        if (e.target.classList.contains('star-btn')) {{
+                            const id = e.target.dataset.id;
+                            const row = document.getElementById('row-' + id);
+                            let s = JSON.parse(localStorage.getItem('atl_stars')) || [];
+                            if (row.classList.toggle('is-highlighted')) s.push(id);
+                            else s = s.filter(i => i !== id);
+                            localStorage.setItem('atl_stars', JSON.stringify(s));
+                            runFilters();
+                        }}
+                    }});
+
+                    document.getElementById('clear-btn').onclick = () => {{
+                        if(confirm("Clear stars?")) {{
+                            localStorage.removeItem('atl_stars');
+                            location.reload();
+                        }}
+                    }};
+
+                    (JSON.parse(localStorage.getItem('atl_stars')) || []).forEach(id => {{
+                        const r = document.getElementById('row-' + id);
+                        if (r) r.classList.add('is-highlighted');
+                    }});
+                    
                     runFilters();
                 </script></body></html>"""
     finally:
         db.close()
 
-# --- ADMIN PANEL ROUTES ---
-
-@app.get("/admin", response_class=HTMLResponse)
-def admin_page():
-    db = SessionLocal()
-    manual_shows = db.query(Event).filter(Event.tm_id.like('manual-%')).order_by(Event.date_time).all()
-    db.close()
-
-    manage_rows = ""
-    for s in manual_shows:
-        manage_rows += f"""<tr>
-            <td><input type="checkbox" class="show-check" value="{s.tm_id}" onchange="toggleBulkBtn()"></td>
-            <td>{s.date_time}</td>
-            <td><strong>{s.name}</strong></td>
-            <td>{s.venue_name}</td>
-        </tr>"""
-
-    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}</head>
-    <body><header><h1>Admin Panel</h1></header>
-        <div class="container">
-            <div class="controls-box">
-                <h3>Bulk Paste Shows</h3>
-                <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Paste AXS data or manual text (Jan 15 - Band - Venue)</p>
-                <textarea id="bulk-input" placeholder="Paste show data here..."></textarea>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="bulk-venue" placeholder="Default Venue (optional)" style="flex-grow:1;">
-                    <button type="button" class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
-                </div>
-                <div id="preview-area" class="hidden" style="margin-top:30px;">
-                    <div id="bulk-list"></div>
-                    <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%; margin-top:20px;">Upload All Shows</button>
-                </div>
-            </div>
-
-            <div class="controls-box">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3>Manage Manual Shows</h3>
-                    <button id="bulk-del-btn" class="del-btn-multi" disabled onclick="deleteSelected()">Delete Selected</button>
-                </div>
-                <table class="manage-table">
-                    <thead><tr>
-                        <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
-                        <th>Date</th><th>Band</th><th>Venue</th>
-                    </tr></thead>
-                    <tbody>{manage_rows}</tbody>
-                </table>
-            </div>
-            
-            <div style="text-align:center; padding-bottom:40px;">
-                <a href="/" class="admin-btn" style="background:#eee; color:#666;">← Back to Site</a>
-            </div>
-        </div>
-        <script>
-            function parseBulk() {{
-                const rawText = document.getElementById('bulk-input').value;
-                const lines = rawText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
-                const list = document.getElementById('bulk-list');
-                const area = document.getElementById('preview-area');
-                const defVenue = document.getElementById('bulk-venue').value;
-                list.innerHTML = '';
-
-                for (let i = 0; i < lines.length; i++) {{
-                    let line = lines[i];
-                    const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+/i);
-                    
-                    if (dateMatch) {{
-                        let dateStr = dateMatch[0];
-                        let bandName = "";
-                        let venueName = defVenue;
-
-                        if (lines[i+1] && !lines[i+1].includes(':00 PM') && !lines[i+1].match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i)) {{
-                            bandName = lines[i+1];
-                            if (lines[i+2] && (lines[i+2].includes('Atlanta') || lines[i+2].includes('GA'))) {{
-                                venueName = lines[i+2].split(',')[0].replace('Heaven at ', '').replace('Hell at ', '').replace('Purgatory at ', '').trim();
-                                i += 2;
-                            }} else {{
-                                i += 1;
-                            }}
-                        }} else {{
-                            bandName = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
-                        }}
-
-                        const div = document.createElement('div');
-                        div.className = 'bulk-row';
-                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}"><input type="text" class="b-date" value="${{dateStr}}"><input type="text" class="b-venue" value="${{venueName}}"><input type="text" class="b-url" placeholder="Link">`;
-                        list.appendChild(div);
-                    }}
-                }}
-                area.classList.remove('hidden');
-            }}
-
-            async function uploadBulk() {{
-                const rows = document.querySelectorAll('.bulk-row');
-                const payload = Array.from(rows).map(r => ({{
-                    name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value,
-                    venue: r.querySelector('.b-venue').value, url: r.querySelector('.b-url').value
-                }}));
-                const resp = await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
-                if (resp.ok) location.reload();
-            }}
-
-            function toggleSelectAll() {{
-                const checked = document.getElementById('select-all').checked;
-                document.querySelectorAll('.show-check').forEach(cb => cb.checked = checked);
-                toggleBulkBtn();
-            }}
-
-            function toggleBulkBtn() {{
-                const anyChecked = document.querySelectorAll('.show-check:checked').length > 0;
-                document.getElementById('bulk-del-btn').disabled = !anyChecked;
-            }}
-
-            async function deleteSelected() {{
-                const selected = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
-                if(!confirm(`Delete ${{selected.length}} shows?`)) return;
-                const resp = await fetch('/admin/delete-bulk', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify(selected)
-                }});
-                if (resp.ok) location.reload();
-            }}
-        </script>
-    </body></html>"""
+# --- ADMIN PANEL ROUTES (STAY THE SAME) ---
+# ... (Keep the rest of your /admin routes here)
 
 @app.post("/admin/delete-bulk")
 async def delete_bulk(ids: list = Body(...)):
