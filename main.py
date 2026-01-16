@@ -132,7 +132,10 @@ def read_root():
                                 <button class="tab-btn" onclick="moveDate(1)">→</button>
                             </div>
                         </div>
-                        <span class="clear-link" id="clear-btn">Clear All Stars</span>
+                        <div style="display: flex; flex-direction: column;">
+                            <span class="clear-link">Select a venue from the list and add it to your favorites</span>
+                            <span class="clear-link" id="clear-btn" style="margin-top: 5px;">Clear All Stars</span>
+                        </div>
                     </div>
                     <table><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
                     <tbody id="event-body">{rows}</tbody></table>
@@ -171,7 +174,6 @@ def read_root():
                             row.style.display = showRow ? "" : "none";
                         }});
 
-                        // Update Nav
                         const nav = document.getElementById('nav-group');
                         const lbl = document.getElementById('view-label');
                         if (currentTab === 'all' || starredOnly) nav.classList.add('hidden');
@@ -182,13 +184,11 @@ def read_root():
                                 viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}});
                         }}
 
-                        // Update Venue Star Color
                         const vStar = document.getElementById('venue-star');
                         vStar.style.color = favVenues.includes(vSel) ? "var(--gold)" : "#ddd";
                         vStar.style.display = vSel === 'all' ? "none" : "block";
                     }}
 
-                    // Venue Favoriting Logic
                     document.getElementById('venue-star').onclick = function() {{
                         const vSel = document.getElementById('venue-select').value;
                         if (vSel === 'all') return;
@@ -256,8 +256,130 @@ def read_root():
     finally:
         db.close()
 
-# --- ADMIN PANEL ROUTES (STAY THE SAME) ---
-# ... (Keep the rest of your /admin routes here)
+# --- ADMIN PANEL ROUTES ---
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page():
+    db = SessionLocal()
+    manual_shows = db.query(Event).filter(Event.tm_id.like('manual-%')).order_by(Event.date_time).all()
+    db.close()
+
+    manage_rows = ""
+    for s in manual_shows:
+        manage_rows += f"""<tr>
+            <td><input type="checkbox" class="show-check" value="{s.tm_id}" onchange="toggleBulkBtn()"></td>
+            <td>{s.date_time}</td>
+            <td><strong>{s.name}</strong></td>
+            <td>{s.venue_name}</td>
+        </tr>"""
+
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}</head>
+    <body><header><h1>Admin Panel</h1></header>
+        <div class="container">
+            <div class="controls-box">
+                <h3>Bulk Paste Shows</h3>
+                <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Paste AXS data or manual text (Jan 15 - Band - Venue)</p>
+                <textarea id="bulk-input" placeholder="Paste show data here..."></textarea>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="bulk-venue" placeholder="Default Venue (optional)" style="flex-grow:1;">
+                    <button type="button" class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
+                </div>
+                <div id="preview-area" class="hidden" style="margin-top:30px;">
+                    <div id="bulk-list"></div>
+                    <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%; margin-top:20px;">Upload All Shows</button>
+                </div>
+            </div>
+
+            <div class="controls-box">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>Manage Manual Shows</h3>
+                    <button id="bulk-del-btn" class="del-btn-multi" disabled onclick="deleteSelected()">Delete Selected</button>
+                </div>
+                <table class="manage-table">
+                    <thead><tr>
+                        <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
+                        <th>Date</th><th>Band</th><th>Venue</th>
+                    </tr></thead>
+                    <tbody>{manage_rows}</tbody>
+                </table>
+            </div>
+            
+            <div style="text-align:center; padding-bottom:40px;">
+                <a href="/" class="admin-btn" style="background:#eee; color:#666;">← Back to Site</a>
+            </div>
+        </div>
+        <script>
+            function parseBulk() {{
+                const rawText = document.getElementById('bulk-input').value;
+                const lines = rawText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+                const list = document.getElementById('bulk-list');
+                const area = document.getElementById('preview-area');
+                const defVenue = document.getElementById('bulk-venue').value;
+                list.innerHTML = '';
+
+                for (let i = 0; i < lines.length; i++) {{
+                    let line = lines[i];
+                    const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d+/i);
+                    
+                    if (dateMatch) {{
+                        let dateStr = dateMatch[0];
+                        let bandName = "";
+                        let venueName = defVenue;
+
+                        if (lines[i+1] && !lines[i+1].includes(':00 PM') && !lines[i+1].match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i)) {{
+                            bandName = lines[i+1];
+                            if (lines[i+2] && (lines[i+2].includes('Atlanta') || lines[i+2].includes('GA'))) {{
+                                venueName = lines[i+2].split(',')[0].replace('Heaven at ', '').replace('Hell at ', '').replace('Purgatory at ', '').trim();
+                                i += 2;
+                            }} else {{
+                                i += 1;
+                            }}
+                        }} else {{
+                            bandName = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
+                        }}
+
+                        const div = document.createElement('div');
+                        div.className = 'bulk-row';
+                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}"><input type="text" class="b-date" value="${{dateStr}}"><input type="text" class="b-venue" value="${{venueName}}"><input type="text" class="b-url" placeholder="Link">`;
+                        list.appendChild(div);
+                    }}
+                }}
+                area.classList.remove('hidden');
+            }}
+
+            async function uploadBulk() {{
+                const rows = document.querySelectorAll('.bulk-row');
+                const payload = Array.from(rows).map(r => ({{
+                    name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value,
+                    venue: r.querySelector('.b-venue').value, url: r.querySelector('.b-url').value
+                }}));
+                const resp = await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+                if (resp.ok) location.reload();
+            }}
+
+            function toggleSelectAll() {{
+                const checked = document.getElementById('select-all').checked;
+                document.querySelectorAll('.show-check').forEach(cb => cb.checked = checked);
+                toggleBulkBtn();
+            }}
+
+            function toggleBulkBtn() {{
+                const anyChecked = document.querySelectorAll('.show-check:checked').length > 0;
+                document.getElementById('bulk-del-btn').disabled = !anyChecked;
+            }}
+
+            async function deleteSelected() {{
+                const selected = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
+                if(!confirm(`Delete ${{selected.length}} shows?`)) return;
+                const resp = await fetch('/admin/delete-bulk', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify(selected)
+                }});
+                if (resp.ok) location.reload();
+            }}
+        </script>
+    </body></html>"""
 
 @app.post("/admin/delete-bulk")
 async def delete_bulk(ids: list = Body(...)):
