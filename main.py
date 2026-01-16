@@ -2,7 +2,7 @@ import os
 import subprocess
 import json
 from fastapi import FastAPI, Form, Request, Body
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from sqlalchemy import create_engine, Column, String, Date, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -25,8 +25,6 @@ Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(bind=engine)
 
 app = FastAPI()
-
-# Path to your favicon file
 FAVICON_PATH = "atlshowFavicon.png"
 
 @app.get('/favicon.ico', include_in_schema=False)
@@ -46,23 +44,22 @@ COMMON_STYLE = """
     .container { max-width: 1000px; margin: auto; }
     header { text-align: center; padding: 40px 0 30px 0; }
     h1 { 
-        font-family: "Baskerville", "Baskerville Old Face", "Hoefler Text", "Garamond", "Times New Roman", serif;
+        font-family: "Baskerville", serif;
         font-weight: 400; font-size: 3.5rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase;
     }
     .controls-box { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     input, select, textarea, .admin-btn { padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
     .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; }
     .admin-btn:hover { background: #222; }
-    textarea { width: 100%; min-height: 150px; font-family: monospace; font-size: 14px; margin-bottom: 10px; }
-    .bulk-row { display: flex; gap: 10px; margin-bottom: 8px; background: #f9f9f9; padding: 10px; border-radius: 8px; }
-    .bulk-row input { flex: 1; padding: 8px; font-size: 14px; }
+    textarea { width: 100%; min-height: 200px; font-family: monospace; font-size: 14px; margin-bottom: 10px; border: 1px solid #ddd; }
+    .bulk-row { display: flex; gap: 10px; margin-bottom: 8px; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+    .bulk-row input { flex: 1; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; }
     .hidden { display: none !important; }
     .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 15px; }
     .manage-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; color: #999; text-transform: uppercase; font-size: 0.7rem; }
     .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
-    .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
+    .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
     .del-btn-multi:disabled { background: #ccc; cursor: not-allowed; }
-    input[type="checkbox"] { transform: scale(1.2); cursor: pointer; }
 </style>
 """
 
@@ -96,7 +93,8 @@ def read_root():
                 <td class="venue-cell">{venue}</td>
                 <td><a href="{data['link']}" target="_blank" style="color:var(--primary); font-weight:bold; text-decoration:none;">Tickets</a></td></tr>"""
 
-        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1000, user-scalable=yes"><title>ATL Show Finder</title>{COMMON_STYLE}
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1000, user-scalable=yes">
+                <title>ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
                 <style>
                     .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; }}
                     .btn-group {{ display: flex; gap: 5px; }}
@@ -127,13 +125,7 @@ def read_root():
                             <div class="btn-group">
                                 <button class="tab-btn active" data-filter="all">ALL</button>
                                 <button class="tab-btn" data-filter="month">MONTHLY</button>
-                                <button class="tab-btn" data-filter="today">DAILY</button>
                                 <button id="fav-filter" class="fav-toggle">STARRED ★</button>
-                            </div>
-                            <div id="nav-group" class="nav-controls hidden">
-                                <button class="tab-btn" onclick="moveDate(-1)">←</button>
-                                <span id="view-label" class="view-label"></span>
-                                <button class="tab-btn" onclick="moveDate(1)">→</button>
                             </div>
                         </div>
                         <span class="clear-link" id="clear-btn">Clear All Stars</span>
@@ -142,25 +134,19 @@ def read_root():
                     <tbody id="event-body">{rows}</tbody></table>
                 </div>
                 <script>
-                    let currentTab = 'all', starredOnly = false, viewingDate = new Date(); viewingDate.setHours(0,0,0,0);
+                    let currentTab = 'all', starredOnly = false;
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
                         document.querySelectorAll('.event-row').forEach(row => {{
-                            const rDate = new Date(row.dataset.date + 'T00:00:00');
                             const isStarred = row.classList.contains('is-highlighted');
                             const txtM = row.innerText.toUpperCase().includes(q);
                             const venM = vSel === 'all' || row.dataset.venueFilter === vSel;
-                            let showRow = starredOnly ? (isStarred && txtM && venM) : ((currentTab === 'all' || (currentTab === 'today' && rDate.toDateString() === viewingDate.toDateString()) || (currentTab === 'month' && rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear())) && txtM && venM);
+                            let showRow = starredOnly ? (isStarred && txtM && venM) : (txtM && venM);
                             row.style.display = showRow ? "" : "none";
                         }});
-                        const nav = document.getElementById('nav-group'), lbl = document.getElementById('view-label');
-                        if (currentTab === 'all' || starredOnly) nav.classList.add('hidden');
-                        else {{ nav.classList.remove('hidden'); lbl.innerText = currentTab === 'today' ? viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}}); }}
                     }}
-                    function moveDate(dir) {{ if (currentTab === 'today') viewingDate.setDate(viewingDate.getDate() + dir); else viewingDate.setMonth(viewingDate.getMonth() + dir); runFilters(); }}
-                    document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{ if (!e.target.dataset.filter) return; starredOnly = false; document.getElementById('fav-filter').classList.remove('active'); document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active')); e.target.classList.add('active'); currentTab = e.target.dataset.filter; runFilters(); }}));
-                    document.getElementById('fav-filter').onclick = function() {{ starredOnly = !starredOnly; this.classList.toggle('active'); if (starredOnly) document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active')); else document.querySelector(`[data-filter="${{currentTab}}"]`).classList.add('active'); runFilters(); }};
+                    document.getElementById('fav-filter').onclick = function() {{ starredOnly = !starredOnly; this.classList.toggle('active'); runFilters(); }};
                     document.getElementById('search').oninput = runFilters;
                     document.getElementById('venue-select').onchange = runFilters;
                     document.addEventListener('click', e => {{ if (e.target.classList.contains('star-btn')) {{ const id = e.target.dataset.id; const row = document.getElementById('row-' + id); let s = JSON.parse(localStorage.getItem('atl_stars')) || []; if (row.classList.toggle('is-highlighted')) s.push(id); else s = s.filter(i => i !== id); localStorage.setItem('atl_stars', JSON.stringify(s)); runFilters(); }} }});
@@ -188,12 +174,13 @@ def admin_page():
             <td>{s.venue_name}</td>
         </tr>"""
 
-    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title>{COMMON_STYLE}</head>
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}</head>
     <body><header><h1>Admin Panel</h1></header>
         <div class="container">
             <div class="controls-box">
                 <h3>Bulk Paste Shows</h3>
-                <textarea id="bulk-input" placeholder="Jan 16 - Atmosphere - Masquerade"></textarea>
+                <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Paste AXS, Ticketmaster, or manual text (Jan 15 - Band - Venue)</p>
+                <textarea id="bulk-input" placeholder="Paste AXS data here..."></textarea>
                 <div style="display:flex; gap:10px;">
                     <input type="text" id="bulk-venue" placeholder="Default Venue (optional)" style="flex-grow:1;">
                     <button type="button" class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
@@ -217,33 +204,54 @@ def admin_page():
                     <tbody>{manage_rows}</tbody>
                 </table>
             </div>
-
-            <div class="controls-box" style="text-align:center;">
-                <form action="/admin/run-collector" method="post" style="display:inline;">
-                    <button type="submit" class="admin-btn">Update Ticketmaster</button>
-                </form>
-                <a href="/" class="admin-btn" style="background:#eee; color:#666; margin-left:10px;">← Back to Site</a>
+            
+            <div style="text-align:center; padding-bottom:40px;">
+                <a href="/" class="admin-btn" style="background:#eee; color:#666;">← Back to Site</a>
             </div>
         </div>
         <script>
             function parseBulk() {{
-                const text = document.getElementById('bulk-input').value;
-                const defaultVenue = document.getElementById('bulk-venue').value;
-                const lines = text.split('\\n').filter(l => l.trim().length > 3);
+                const rawText = document.getElementById('bulk-input').value;
+                const lines = rawText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
                 const list = document.getElementById('bulk-list');
                 const area = document.getElementById('preview-area');
+                const defVenue = document.getElementById('bulk-venue').value;
                 list.innerHTML = '';
-                lines.forEach(line => {{
-                    const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+/i) || line.match(/\d+\/\d+/);
-                    const dateStr = dateMatch ? dateMatch[0] : "";
-                    const namePart = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
-                    const div = document.createElement('div');
-                    div.className = 'bulk-row';
-                    div.innerHTML = `<input type="text" class="b-name" value="${{namePart}}"><input type="text" class="b-date" value="${{dateStr}}"><input type="text" class="b-venue" value="${{defaultVenue}}"><input type="text" class="b-url" placeholder="Link">`;
-                    list.appendChild(div);
-                }});
+
+                for (let i = 0; i < lines.length; i++) {{
+                    let line = lines[i];
+                    // Find a date (e.g., Jan 15)
+                    const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+/i);
+                    
+                    if (dateMatch) {{
+                        let dateStr = dateMatch[0];
+                        let bandName = "";
+                        let venueName = defVenue;
+
+                        // AXS Format: Date line followed by band line, then venue line
+                        if (lines[i+1] && !lines[i+1].includes(':00 PM') && !lines[i+1].match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i)) {{
+                            bandName = lines[i+1];
+                            // Check if line i+2 is a venue (usually contains 'Atlanta' or 'GA')
+                            if (lines[i+2] && (lines[i+2].includes('Atlanta') || lines[i+2].includes('GA'))) {{
+                                venueName = lines[i+2].split(',')[0].replace('Heaven at ', '').replace('Hell at ', '').replace('Purgatory at ', '').trim();
+                                i += 2; // Jump past band and venue lines
+                            }} else {{
+                                i += 1; // Jump past band line
+                            }}
+                        } else {{
+                            // Fallback for: Jan 15 - Band Name - Venue
+                            bandName = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
+                        }}
+
+                        const div = document.createElement('div');
+                        div.className = 'bulk-row';
+                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}"><input type="text" class="b-date" value="${{dateStr}}"><input type="text" class="b-venue" value="${{venueName}}"><input type="text" class="b-url" placeholder="Link">`;
+                        list.appendChild(div);
+                    }}
+                }}
                 area.classList.remove('hidden');
             }}
+
             async function uploadBulk() {{
                 const rows = document.querySelectorAll('.bulk-row');
                 const payload = Array.from(rows).map(r => ({{
@@ -268,7 +276,6 @@ def admin_page():
             async function deleteSelected() {{
                 const selected = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
                 if(!confirm(`Delete ${{selected.length}} shows?`)) return;
-                
                 const resp = await fetch('/admin/delete-bulk', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
@@ -283,8 +290,7 @@ def admin_page():
 async def delete_bulk(ids: list = Body(...)):
     db = SessionLocal()
     db.query(Event).filter(Event.tm_id.in_(ids)).delete(synchronize_session=False)
-    db.commit()
-    db.close()
+    db.commit(); db.close()
     return {"status": "ok"}
 
 @app.post("/admin/bulk-save")
@@ -303,8 +309,3 @@ async def bulk_save(data: list = Body(...)):
         except: continue
     db.commit(); db.close()
     return {"status": "ok"}
-
-@app.post("/admin/run-collector")
-def run_collector():
-    if os.path.exists("collector.py"): subprocess.Popen(["python", "collector.py"])
-    return RedirectResponse(url="/admin", status_code=303)
