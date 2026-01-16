@@ -43,10 +43,7 @@ COMMON_STYLE = """
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; min-width: 1000px; }
     .container { max-width: 1000px; margin: auto; }
     header { text-align: center; padding: 40px 0 30px 0; }
-    h1 { 
-        font-family: "Baskerville", serif;
-        font-weight: 400; font-size: 3.5rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase;
-    }
+    h1 { font-family: "Baskerville", serif; font-weight: 400; font-size: 3.5rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase; }
     .controls-box { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     input, select, textarea, .admin-btn { padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
     .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; }
@@ -58,7 +55,6 @@ COMMON_STYLE = """
     .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 15px; }
     .manage-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; color: #999; text-transform: uppercase; font-size: 0.7rem; }
     .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
-    .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 </style>
 """
 
@@ -112,20 +108,23 @@ def read_root():
                     .lineup-cell {{ font-size: 1.05rem; color: #333; }}
                     .venue-cell {{ color: var(--text-light); font-size: 0.9rem; }}
                     .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; }}
+                    .venue-fav-btn {{ padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }}
                 </style></head>
             <body><header><h1>ATL Show Finder</h1></header>
                 <div class="container">
                     <div class="controls-box">
                         <div class="search-row" style="display:flex; gap:10px; margin-bottom:15px;">
-                            <input type="text" id="search" placeholder="Search bands or venues..." style="flex-grow:1;">
-                            <select id="venue-select">{venue_options}</select>
+                            <input type="text" id="search" placeholder="Search bands..." style="flex-grow:1;">
+                            <select id="venue-select" style="flex-grow:1;">{venue_options}</select>
+                            <button id="venue-star" class="venue-fav-btn">★</button>
                         </div>
                         <div class="filter-bar">
                             <div class="btn-group">
                                 <button class="tab-btn active" data-filter="all">ALL</button>
                                 <button class="tab-btn" data-filter="month">MONTHLY</button>
                                 <button class="tab-btn" data-filter="today">DAILY</button>
-                                <button id="fav-filter" class="fav-toggle">STARRED ★</button>
+                                <button id="fav-filter" class="fav-toggle">STARRED SHOWS ★</button>
+                                <button id="fav-venue-filter" class="fav-toggle">FAV VENUES ★</button>
                             </div>
                             <div id="nav-group" class="nav-controls hidden" style="display:flex; align-items:center; gap:10px;">
                                 <button class="tab-btn" onclick="moveDate(-1)">←</button>
@@ -139,44 +138,72 @@ def read_root():
                     <tbody id="event-body">{rows}</tbody></table>
                 </div>
                 <script>
-                    let currentTab = 'all', starredOnly = false, viewingDate = new Date(); 
+                    let currentTab = 'all', starredOnly = false, venueFavsOnly = false, viewingDate = new Date();
                     viewingDate.setHours(0,0,0,0);
 
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
+                        const favVenues = JSON.parse(localStorage.getItem('atl_venue_stars')) || [];
                         
                         document.querySelectorAll('.event-row').forEach(row => {{
                             const rDate = new Date(row.dataset.date + 'T00:00:00');
                             const isStarred = row.classList.contains('is-highlighted');
+                            const isFavVenue = favVenues.includes(row.dataset.venueFilter);
                             const txtM = row.innerText.toUpperCase().includes(q);
                             const venM = vSel === 'all' || row.dataset.venueFilter === vSel;
                             
                             let showRow = false;
+                            let matchesSearch = txtM && venM;
+
+                            if (venueFavsOnly) matchesSearch = matchesSearch && isFavVenue;
+
                             if (starredOnly) {{
-                                showRow = isStarred && txtM && venM;
+                                showRow = isStarred && matchesSearch;
                             }} else if (currentTab === 'all') {{
-                                showRow = txtM && venM;
+                                showRow = matchesSearch;
                             }} else if (currentTab === 'today') {{
-                                showRow = rDate.toDateString() === viewingDate.toDateString() && txtM && venM;
+                                showRow = rDate.toDateString() === viewingDate.toDateString() && matchesSearch;
                             }} else if (currentTab === 'month') {{
-                                showRow = rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear() && txtM && venM;
+                                showRow = rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear() && matchesSearch;
                             }}
                             
                             row.style.display = showRow ? "" : "none";
                         }});
 
+                        // Update Nav
                         const nav = document.getElementById('nav-group');
                         const lbl = document.getElementById('view-label');
-                        if (currentTab === 'all' || starredOnly) {{
-                            nav.classList.add('hidden');
-                        }} else {{
+                        if (currentTab === 'all' || starredOnly) nav.classList.add('hidden');
+                        else {{
                             nav.classList.remove('hidden');
                             lbl.innerText = currentTab === 'today' ? 
                                 viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : 
                                 viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}});
                         }}
+
+                        // Update Venue Star Color
+                        const vStar = document.getElementById('venue-star');
+                        vStar.style.color = favVenues.includes(vSel) ? "var(--gold)" : "#ddd";
+                        vStar.style.display = vSel === 'all' ? "none" : "block";
                     }}
+
+                    // Venue Favoriting Logic
+                    document.getElementById('venue-star').onclick = function() {{
+                        const vSel = document.getElementById('venue-select').value;
+                        if (vSel === 'all') return;
+                        let favs = JSON.parse(localStorage.getItem('atl_venue_stars')) || [];
+                        if (favs.includes(vSel)) favs = favs.filter(v => v !== vSel);
+                        else favs.push(vSel);
+                        localStorage.setItem('atl_venue_stars', JSON.stringify(favs));
+                        runFilters();
+                    }};
+
+                    document.getElementById('fav-venue-filter').onclick = function() {{
+                        venueFavsOnly = !venueFavsOnly;
+                        this.classList.toggle('active');
+                        runFilters();
+                    }};
 
                     function moveDate(dir) {{
                         if (currentTab === 'today') viewingDate.setDate(viewingDate.getDate() + dir);
@@ -197,17 +224,11 @@ def read_root():
                     document.getElementById('fav-filter').onclick = function() {{
                         starredOnly = !starredOnly;
                         this.classList.toggle('active');
-                        if (starredOnly) {{
-                            document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
-                        }} else {{
-                            document.querySelector(`[data-filter="${{currentTab}}"]`).classList.add('active');
-                        }}
                         runFilters();
                     }};
 
                     document.getElementById('search').oninput = runFilters;
                     document.getElementById('venue-select').onchange = runFilters;
-                    
                     document.addEventListener('click', e => {{
                         if (e.target.classList.contains('star-btn')) {{
                             const id = e.target.dataset.id;
@@ -219,19 +240,17 @@ def read_root():
                             runFilters();
                         }}
                     }});
-
                     document.getElementById('clear-btn').onclick = () => {{
                         if(confirm("Clear stars?")) {{
                             localStorage.removeItem('atl_stars');
+                            localStorage.removeItem('atl_venue_stars');
                             location.reload();
                         }}
                     }};
-
                     (JSON.parse(localStorage.getItem('atl_stars')) || []).forEach(id => {{
                         const r = document.getElementById('row-' + id);
                         if (r) r.classList.add('is-highlighted');
                     }});
-                    
                     runFilters();
                 </script></body></html>"""
     finally:
