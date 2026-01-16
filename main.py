@@ -101,7 +101,6 @@ def read_root():
                     .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }}
                     .tab-btn.active {{ background: #444; color: white; }}
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
-                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 120px; text-align: center; }}
                     table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; }}
                     td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
@@ -124,7 +123,6 @@ def read_root():
                         <div class="filter-bar">
                             <div class="btn-group">
                                 <button class="tab-btn active" data-filter="all">ALL</button>
-                                <button class="tab-btn" data-filter="month">MONTHLY</button>
                                 <button id="fav-filter" class="fav-toggle">STARRED ★</button>
                             </div>
                         </div>
@@ -179,8 +177,8 @@ def admin_page():
         <div class="container">
             <div class="controls-box">
                 <h3>Bulk Paste Shows</h3>
-                <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Paste AXS, Ticketmaster, or manual text (Jan 15 - Band - Venue)</p>
-                <textarea id="bulk-input" placeholder="Paste AXS data here..."></textarea>
+                <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Paste AXS data or manual text (Jan 15 - Band - Venue)</p>
+                <textarea id="bulk-input" placeholder="Paste show data here..."></textarea>
                 <div style="display:flex; gap:10px;">
                     <input type="text" id="bulk-venue" placeholder="Default Venue (optional)" style="flex-grow:1;">
                     <button type="button" class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
@@ -220,7 +218,6 @@ def admin_page():
 
                 for (let i = 0; i < lines.length; i++) {{
                     let line = lines[i];
-                    // Find a date (e.g., Jan 15)
                     const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+/i);
                     
                     if (dateMatch) {{
@@ -228,18 +225,15 @@ def admin_page():
                         let bandName = "";
                         let venueName = defVenue;
 
-                        // AXS Format: Date line followed by band line, then venue line
                         if (lines[i+1] && !lines[i+1].includes(':00 PM') && !lines[i+1].match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i)) {{
                             bandName = lines[i+1];
-                            // Check if line i+2 is a venue (usually contains 'Atlanta' or 'GA')
                             if (lines[i+2] && (lines[i+2].includes('Atlanta') || lines[i+2].includes('GA'))) {{
                                 venueName = lines[i+2].split(',')[0].replace('Heaven at ', '').replace('Hell at ', '').replace('Purgatory at ', '').trim();
-                                i += 2; // Jump past band and venue lines
+                                i += 2;
                             }} else {{
-                                i += 1; // Jump past band line
+                                i += 1;
                             }}
-                        } else {{
-                            // Fallback for: Jan 15 - Band Name - Venue
+                        }} else {{
                             bandName = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
                         }}
 
