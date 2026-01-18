@@ -57,7 +57,6 @@ COMMON_STYLE = """
     .venue-fav-btn { height: 48px; width: 48px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
     .hidden { display: none !important; }
     
-    /* Harmonized Filter Buttons */
     .tab-btn, .fav-toggle { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 42px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; vertical-align: top; }
     .tab-btn.active { background: #444; color: white; }
     .fav-toggle.active { background: var(--gold); color: #442c00; }
@@ -121,27 +120,25 @@ def read_root():
                         </div>
 
                         <div style="display:flex; gap:20px; align-items: flex-start;">
-                            <div style="flex: 1; display:flex; gap:5px;">
-                                <button class="tab-btn active" data-filter="all">ALL</button>
-                                <button class="tab-btn" data-filter="month">MONTHLY</button>
-                                <button class="tab-btn" data-filter="today">DAILY</button>
-                                <button id="fav-filter" class="fav-toggle">STARRED SHOWS ★</button>
-                                <div id="nav-group" class="hidden" style="display:flex; align-items:center; gap:5px;">
-                                    <button class="tab-btn" onclick="moveDate(-1)">←</button>
-                                    <span id="view-label" class="view-label"></span>
-                                    <button class="tab-btn" onclick="moveDate(1)">→</button>
+                            <div style="flex: 1; display:flex; flex-direction:column; gap:8px;">
+                                <div style="display:flex; gap:5px;">
+                                    <button class="tab-btn active" data-filter="all">ALL</button>
+                                    <button class="tab-btn" data-filter="month">MONTHLY</button>
+                                    <button class="tab-btn" data-filter="today">DAILY</button>
+                                    <button id="fav-filter" class="fav-toggle">STARRED SHOWS ★</button>
+                                    <div id="nav-group" class="hidden" style="display:flex; align-items:center; gap:5px;">
+                                        <button class="tab-btn" onclick="moveDate(-1)">←</button>
+                                        <span id="view-label" class="view-label"></span>
+                                        <button class="tab-btn" onclick="moveDate(1)">→</button>
+                                    </div>
                                 </div>
+                                <span class="clear-link" id="clear-btn" style="text-align:left;">Clear All Stars</span>
                             </div>
                             
                             <div style="flex: 1; display:flex; flex-direction:column; gap:8px;">
                                 <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
                                 <span class="clear-link" style="text-align:right; cursor: default;">Click on a venue from the list and add it to your favorites</span>
                             </div>
-                        </div>
-                        
-                        <div style="margin-top: 15px; display: flex; justify-content: space-between;">
-                            <span class="clear-link" id="clear-btn">Clear All Stars</span>
-                            <a href="/admin" class="clear-link" style="color: #999;">Admin Panel</a>
                         </div>
                     </div>
                     <table><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
