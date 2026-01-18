@@ -51,7 +51,6 @@ COMMON_STYLE = """
     .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; border-radius: 8px; }
     .admin-btn:hover { background: #222; }
     
-    /* Updated instructional text colors to Dark Gray */
     .clear-link { color: #444444; font-size: 0.75rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; font-weight: 500; }
     .clear-link:hover { text-decoration: underline; }
 
@@ -93,12 +92,13 @@ def read_root():
         return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1000, user-scalable=yes">
                 <title>ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
                 <style>
-                    .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 15px; }}
+                    .filter-bar {{ display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 15px; }}
                     .btn-group {{ display: flex; gap: 5px; }}
-                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 38px; }}
+                    /* Harmonized button heights */
+                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 42px; display: flex; align-items: center; justify-content: center; }}
                     .tab-btn.active {{ background: #444; color: white; }}
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
-                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; }}
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; margin-bottom: 8px; }}
                     table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; }}
                     td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
