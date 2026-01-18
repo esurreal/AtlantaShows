@@ -49,12 +49,13 @@ COMMON_STYLE = """
     .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; }
     .admin-btn:hover { background: #222; }
     textarea { width: 100%; min-height: 200px; font-family: monospace; font-size: 14px; margin-bottom: 10px; border: 1px solid #ddd; }
-    .bulk-row { display: flex; gap: 10px; margin-bottom: 8px; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
-    .bulk-row input { flex: 1; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; }
     .hidden { display: none !important; }
     .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 15px; }
     .manage-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; color: #999; text-transform: uppercase; font-size: 0.7rem; }
     .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
+    .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .clear-link { color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; }
+    .venue-fav-btn { padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
 </style>
 """
 
@@ -63,11 +64,11 @@ def read_root():
     db = SessionLocal()
     today = date.today()
     try:
-        raw_events = db.query(Event).order_by(Event.date_time).all()
+        raw_events = db.query(Event).filter(Event.date_time >= today).order_by(Event.date_time).all()
         grouped_events = defaultdict(lambda: {"artists": set(), "link": ""})
         unique_dropdown_venues = set()
+        
         for e in raw_events:
-            if e.date_time < today: continue
             v_display = e.venue_name
             v_dropdown = "The Masquerade" if "Masquerade" in v_display else ("Center Stage / Loft / Vinyl" if any(x in v_display for x in ["Center Stage", "The Loft", "Vinyl"]) else v_display)
             unique_dropdown_venues.add(v_dropdown)
@@ -105,18 +106,20 @@ def read_root():
                     .star-btn {{ background: none; border: none; color: #eee; font-size: 1.4rem; cursor: pointer; }}
                     .is-highlighted .star-btn {{ color: var(--gold) !important; }}
                     .date-cell {{ color: #777; font-weight: 700; white-space: nowrap; width: 110px; }}
-                    .lineup-cell {{ font-size: 1.05rem; color: #333; }}
-                    .venue-cell {{ color: var(--text-light); font-size: 0.9rem; }}
-                    .clear-link {{ color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; }}
-                    .venue-fav-btn {{ padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }}
                 </style></head>
             <body><header><h1>ATL Show Finder</h1></header>
                 <div class="container">
                     <div class="controls-box">
                         <div class="search-row" style="display:flex; gap:10px; margin-bottom:15px;">
                             <input type="text" id="search" placeholder="Search bands..." style="flex-grow:1;">
-                            <select id="venue-select" style="flex-grow:1;">{venue_options}</select>
-                            <button id="venue-star" class="venue-fav-btn">★</button>
+                            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+                                <div style="display:flex; gap:5px;">
+                                    <select id="venue-select" style="min-width: 250px;">{venue_options}</select>
+                                    <button id="venue-star" class="venue-fav-btn">★</button>
+                                </div>
+                                <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
+                                <span class="clear-link" style="margin:0; text-align:right;">Click on a venue from the list and add it to your favorites</span>
+                            </div>
                         </div>
                         <div class="filter-bar">
                             <div class="btn-group">
@@ -124,7 +127,6 @@ def read_root():
                                 <button class="tab-btn" data-filter="month">MONTHLY</button>
                                 <button class="tab-btn" data-filter="today">DAILY</button>
                                 <button id="fav-filter" class="fav-toggle">STARRED SHOWS ★</button>
-                                <button id="fav-venue-filter" class="fav-toggle">FAV VENUES ★</button>
                             </div>
                             <div id="nav-group" class="nav-controls hidden" style="display:flex; align-items:center; gap:10px;">
                                 <button class="tab-btn" onclick="moveDate(-1)">←</button>
@@ -132,17 +134,14 @@ def read_root():
                                 <button class="tab-btn" onclick="moveDate(1)">→</button>
                             </div>
                         </div>
-                        <div style="display: flex; flex-direction: column;">
-                            <span class="clear-link">Select a venue from the list and add it to your favorites</span>
-                            <span class="clear-link" id="clear-btn" style="margin-top: 5px;">Clear All Stars</span>
-                        </div>
+                        <span class="clear-link" id="clear-btn" style="display:block;">Clear All Stars</span>
                     </div>
                     <table><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
                     <tbody id="event-body">{rows}</tbody></table>
                 </div>
                 <script>
-                    let currentTab = 'all', starredOnly = false, venueFavsOnly = false, viewingDate = new Date();
-                    viewingDate.setHours(0,0,0,0);
+                    let currentTab = 'all', starredOnly = false, venueFavsOnly = false;
+                    let viewingDate = new Date(); viewingDate.setHours(0,0,0,0);
 
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
@@ -158,7 +157,6 @@ def read_root():
                             
                             let showRow = false;
                             let matchesSearch = txtM && venM;
-
                             if (venueFavsOnly) matchesSearch = matchesSearch && isFavVenue;
 
                             if (starredOnly) {{
@@ -170,7 +168,6 @@ def read_root():
                             }} else if (currentTab === 'month') {{
                                 showRow = rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear() && matchesSearch;
                             }}
-                            
                             row.style.display = showRow ? "" : "none";
                         }});
 
@@ -213,8 +210,12 @@ def read_root():
 
                     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
                         if (!e.target.dataset.filter) return;
+                        // Reset persistent toggles when switching time views
                         starredOnly = false;
+                        venueFavsOnly = false;
                         document.getElementById('fav-filter').classList.remove('active');
+                        document.getElementById('fav-venue-filter').classList.remove('active');
+                        
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active');
                         currentTab = e.target.dataset.filter;
@@ -229,6 +230,7 @@ def read_root():
 
                     document.getElementById('search').oninput = runFilters;
                     document.getElementById('venue-select').onchange = runFilters;
+                    
                     document.addEventListener('click', e => {{
                         if (e.target.classList.contains('star-btn')) {{
                             const id = e.target.dataset.id;
@@ -240,13 +242,15 @@ def read_root():
                             runFilters();
                         }}
                     }});
+
                     document.getElementById('clear-btn').onclick = () => {{
-                        if(confirm("Clear stars?")) {{
+                        if(confirm("Clear stars and venue favorites?")) {{
                             localStorage.removeItem('atl_stars');
                             localStorage.removeItem('atl_venue_stars');
                             location.reload();
                         }}
                     }};
+
                     (JSON.parse(localStorage.getItem('atl_stars')) || []).forEach(id => {{
                         const r = document.getElementById('row-' + id);
                         if (r) r.classList.add('is-highlighted');
@@ -255,6 +259,9 @@ def read_root():
                 </script></body></html>"""
     finally:
         db.close()
+
+# --- ADMIN PANEL ROUTES --- (Keep your existing admin logic below)
+# ...
 
 # --- ADMIN PANEL ROUTES ---
 
@@ -391,13 +398,18 @@ async def delete_bulk(ids: list = Body(...)):
 @app.post("/admin/bulk-save")
 async def bulk_save(data: list = Body(...)):
     db = SessionLocal()
-    current_year = date.today().year
+    current_date = date.today()
     for item in data:
         try:
             name, raw_date, venue = item.get('name'), item.get('date'), item.get('venue')
-            if "/" in raw_date: dt = datetime.strptime(f"{current_year}/{raw_date}", "%Y/%m/%d")
-            else: dt = datetime.strptime(f"{current_year} {raw_date}", "%Y %b %d")
-            if dt.date() < date.today(): dt = dt.replace(year=current_year + 1)
+            if "/" in raw_date: dt = datetime.strptime(f"{current_date.year}/{raw_date}", "%Y/%m/%d")
+            else: dt = datetime.strptime(f"{current_date.year} {raw_date}", "%Y %b %d")
+            
+            # Year rollover logic: If the parsed date is more than 6 months in the past,
+            # it's likely a show for next year.
+            if dt.date() < current_date.replace(month=current_date.month - 6 if current_date.month > 6 else 1):
+                dt = dt.replace(year=current_date.year + 1)
+                
             final_date = dt.date()
             tm_id = f"manual-{name.replace(' ', '')}-{final_date.isoformat()}"
             db.merge(Event(tm_id=tm_id, name=name, date_time=final_date, venue_name=venue, ticket_url=item.get('url', '')))
