@@ -51,8 +51,8 @@ COMMON_STYLE = """
     .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; border-radius: 8px; }
     .admin-btn:hover { background: #222; }
     
-    .clear-link { color: #444444; font-size: 0.75rem; cursor: pointer; display: inline-block; text-decoration: none; font-weight: 500; }
-    .clear-link:hover { text-decoration: underline; }
+    .clear-link { color: #888; font-size: 0.75rem; cursor: pointer; display: inline-block; text-decoration: none; font-weight: 500; }
+    .clear-link:hover { text-decoration: underline; color: var(--text); }
 
     .venue-fav-btn { height: 48px; width: 48px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
     .hidden { display: none !important; }
@@ -132,12 +132,12 @@ def read_root():
                                         <button class="tab-btn" onclick="moveDate(1)">→</button>
                                     </div>
                                 </div>
-                                <span class="clear-link" id="clear-btn" style="text-align:left;">Clear All Stars</span>
+                                <span class="clear-link" id="clear-btn" style="text-align:left; margin-left: 5px;">Clear All Stars</span>
                             </div>
                             
                             <div style="flex: 1; display:flex; flex-direction:column; gap:8px;">
                                 <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
-                                <span class="clear-link" style="text-align:right; cursor: default;">Click on a venue from the list and add it to your favorites</span>
+                                <span class="clear-link" style="text-align:right; cursor: default; margin-right: 5px;">Click on a venue from the list and add it to your favorites</span>
                             </div>
                         </div>
                     </div>
@@ -204,10 +204,7 @@ def read_root():
                     document.getElementById('fav-venue-filter').onclick = function() {{
                         venueFavsOnly = !venueFavsOnly;
                         this.classList.toggle('active');
-                        // Reset venue dropdown to "all" when filtering by favorites
-                        if (venueFavsOnly) {{
-                            document.getElementById('venue-select').value = 'all';
-                        }}
+                        if (venueFavsOnly) {{ document.getElementById('venue-select').value = 'all'; }}
                         runFilters();
                     }};
 
@@ -223,7 +220,6 @@ def read_root():
                         venueFavsOnly = false;
                         document.getElementById('fav-filter').classList.remove('active');
                         document.getElementById('fav-venue-filter').classList.remove('active');
-                        
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active');
                         currentTab = e.target.dataset.filter;
@@ -331,15 +327,39 @@ def admin_page():
 
                 for (let i = 0; i < lines.length; i++) {{
                     let line = lines[i];
+                    // Match date like "SAT May 2, 2026"
                     const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d+/i);
+                    
                     if (dateMatch) {{
                         let dateStr = dateMatch[0];
-                        let bandName = lines[i+1] || "Unknown Band";
+                        let bandName = "Unknown Band";
                         let venueName = defVenue || "Unknown Venue";
+
+                        // AXS Format: Date Line -> Band Line -> Venue/Location Line
+                        if (lines[i+1]) {{
+                            bandName = lines[i+1];
+                            if (lines[i+2]) {{
+                                // Split by " - " or "," to isolate the venue name from city/state
+                                let locRaw = lines[i+2].split(' - ')[0].split(',')[0];
+                                venueName = locRaw
+                                    .replace('Heaven at ', '')
+                                    .replace('Hell at ', '')
+                                    .replace('Purgatory at ', '')
+                                    .trim();
+                                i += 2; // Skip processed lines
+                            }} else {{
+                                i += 1;
+                            }}
+                        }}
+
                         const div = document.createElement('div');
                         div.className = 'bulk-row';
                         div.style = "display:flex; gap:10px; margin-bottom:5px;";
-                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}" style="flex:2"><input type="text" class="b-date" value="${{dateStr}}" style="flex:1"><input type="text" class="b-venue" value="${{venueName}}" style="flex:2">`;
+                        div.innerHTML = `
+                            <input type="text" class="b-name" value="${{bandName}}" style="flex:2">
+                            <input type="text" class="b-date" value="${{dateStr}}" style="flex:1">
+                            <input type="text" class="b-venue" value="${{venueName}}" style="flex:2">
+                        `;
                         list.appendChild(div);
                     }}
                 }}
