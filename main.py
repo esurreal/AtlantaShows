@@ -44,18 +44,19 @@ COMMON_STYLE = """
     .container { max-width: 1000px; margin: auto; }
     header { text-align: center; padding: 40px 0 30px 0; }
     h1 { font-family: "Baskerville", serif; font-weight: 400; font-size: 3.5rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase; }
-    .controls-box { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    input, select, textarea, .admin-btn { padding: 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
-    .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; }
+    .controls-box { background: var(--card-bg); padding: 30px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    
+    .search-input { height: 48px; width: 100%; padding: 0 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
+    
+    .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; border-radius: 8px; }
     .admin-btn:hover { background: #222; }
-    textarea { width: 100%; min-height: 200px; font-family: monospace; font-size: 14px; margin-bottom: 10px; border: 1px solid #ddd; }
+    
+    /* Updated instructional text colors to Dark Gray */
+    .clear-link { color: #444444; font-size: 0.75rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; font-weight: 500; }
+    .clear-link:hover { text-decoration: underline; }
+
+    .venue-fav-btn { height: 48px; width: 48px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
     .hidden { display: none !important; }
-    .manage-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 15px; }
-    .manage-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; color: #999; text-transform: uppercase; font-size: 0.7rem; }
-    .manage-table td { padding: 10px; border-bottom: 1px solid #eee; }
-    .del-btn-multi { background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    .clear-link { color: #ccc; font-size: 0.7rem; cursor: pointer; margin-top: 10px; display: inline-block; }
-    .venue-fav-btn { padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
 </style>
 """
 
@@ -92,9 +93,9 @@ def read_root():
         return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1000, user-scalable=yes">
                 <title>ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
                 <style>
-                    .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; }}
+                    .filter-bar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 15px; }}
                     .btn-group {{ display: flex; gap: 5px; }}
-                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }}
+                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 38px; }}
                     .tab-btn.active {{ background: #444; color: white; }}
                     .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
                     .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; }}
@@ -110,17 +111,20 @@ def read_root():
             <body><header><h1>ATL Show Finder</h1></header>
                 <div class="container">
                     <div class="controls-box">
-                        <div class="search-row" style="display:flex; gap:10px; margin-bottom:15px;">
-                            <input type="text" id="search" placeholder="Search bands..." style="flex-grow:1;">
-                            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
-                                <div style="display:flex; gap:5px;">
-                                    <select id="venue-select" style="min-width: 250px;">{venue_options}</select>
+                        <div style="display:flex; gap:20px; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <input type="text" id="search" class="search-input" placeholder="Search bands...">
+                            </div>
+                            <div style="flex: 1; display:flex; flex-direction:column; gap:8px;">
+                                <div style="display:flex; gap:8px; width:100%;">
+                                    <select id="venue-select" class="search-input">{venue_options}</select>
                                     <button id="venue-star" class="venue-fav-btn">★</button>
                                 </div>
                                 <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
-                                <span class="clear-link" style="margin:0; text-align:right;">Click on a venue from the list and add it to your favorites</span>
+                                <span class="clear-link" style="margin:0; text-align:right; cursor: default;">Click on a venue from the list and add it to your favorites</span>
                             </div>
                         </div>
+
                         <div class="filter-bar">
                             <div class="btn-group">
                                 <button class="tab-btn active" data-filter="all">ALL</button>
@@ -210,7 +214,6 @@ def read_root():
 
                     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
                         if (!e.target.dataset.filter) return;
-                        // Reset persistent toggles when switching time views
                         starredOnly = false;
                         venueFavsOnly = false;
                         document.getElementById('fav-filter').classList.remove('active');
@@ -259,6 +262,8 @@ def read_root():
                 </script></body></html>"""
     finally:
         db.close()
+
+# --- ADMIN PANEL ROUTES REMAIN THE SAME ---
 
 # --- ADMIN PANEL ROUTES --- (Keep your existing admin logic below)
 # ...
