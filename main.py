@@ -147,31 +147,38 @@ def read_root():
                 <script>
                     let currentTab = 'all', starredOnly = false, venueFavsOnly = false;
                     let viewingDate = new Date(); viewingDate.setHours(0,0,0,0);
+                    const rows = Array.from(document.querySelectorAll('.event-row'));
 
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
                         const favVenues = JSON.parse(localStorage.getItem('atl_venue_stars')) || [];
                         
-                        document.querySelectorAll('.event-row').forEach(row => {{
-                            const rDate = new Date(row.dataset.date + 'T00:00:00');
+                        const viewMonth = viewingDate.getMonth();
+                        const viewYear = viewingDate.getFullYear();
+                        const viewDayStr = viewingDate.toDateString();
+
+                        rows.forEach(row => {{
                             const isStarred = row.classList.contains('is-highlighted');
                             const isFavVenue = favVenues.includes(row.dataset.venueFilter);
                             const txtM = row.innerText.toUpperCase().includes(q);
                             const venM = vSel === 'all' || row.dataset.venueFilter === vSel;
                             
-                            let showRow = false;
                             let matchesSearch = txtM && venM;
                             if (venueFavsOnly) matchesSearch = matchesSearch && isFavVenue;
 
+                            let showRow = false;
                             if (starredOnly) {{
                                 showRow = isStarred && matchesSearch;
                             }} else if (currentTab === 'all') {{
                                 showRow = matchesSearch;
-                            }} else if (currentTab === 'today') {{
-                                showRow = rDate.toDateString() === viewingDate.toDateString() && matchesSearch;
-                            }} else if (currentTab === 'month') {{
-                                showRow = rDate.getMonth() === viewingDate.getMonth() && rDate.getFullYear() === viewingDate.getFullYear() && matchesSearch;
+                            }} else {{
+                                const rDate = new Date(row.dataset.date + 'T00:00:00');
+                                if (currentTab === 'today') {{
+                                    showRow = rDate.toDateString() === viewDayStr && matchesSearch;
+                                }} else if (currentTab === 'month') {{
+                                    showRow = rDate.getMonth() === viewMonth && rDate.getFullYear() === viewYear && matchesSearch;
+                                }}
                             }}
                             row.style.display = showRow ? "" : "none";
                         }});
@@ -204,15 +211,15 @@ def read_root():
                     document.getElementById('fav-venue-filter').onclick = function() {{
                         venueFavsOnly = !venueFavsOnly;
                         this.classList.toggle('active');
-                        if (venueFavsOnly) {{ document.getElementById('venue-select').value = 'all'; }}
+                        if (venueFavsOnly) document.getElementById('venue-select').value = 'all';
                         runFilters();
                     }};
 
-                    function moveDate(dir) {{
+                    window.moveDate = function(dir) {{
                         if (currentTab === 'today') viewingDate.setDate(viewingDate.getDate() + dir);
                         else viewingDate.setMonth(viewingDate.getMonth() + dir);
                         runFilters();
-                    }}
+                    }};
 
                     document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
                         if (!e.target.dataset.filter) return;
@@ -232,8 +239,8 @@ def read_root():
                         runFilters();
                     }};
 
-                    document.getElementById('search').oninput = runFilters;
-                    document.getElementById('venue-select').onchange = runFilters;
+                    document.getElementById('search').addEventListener('input', runFilters);
+                    document.getElementById('venue-select').addEventListener('change', runFilters);
                     
                     document.addEventListener('click', e => {{
                         if (e.target.classList.contains('star-btn')) {{
@@ -243,7 +250,7 @@ def read_root():
                             if (row.classList.toggle('is-highlighted')) s.push(id);
                             else s = s.filter(i => i !== id);
                             localStorage.setItem('atl_stars', JSON.stringify(s));
-                            runFilters();
+                            if (starredOnly) runFilters();
                         }}
                     }});
 
@@ -272,14 +279,7 @@ def admin_page():
     manual_shows = db.query(Event).filter(Event.tm_id.like('manual-%')).order_by(Event.date_time).all()
     db.close()
 
-    manage_rows = ""
-    for s in manual_shows:
-        manage_rows += f"""<tr>
-            <td><input type="checkbox" class="show-check" value="{s.tm_id}" onchange="toggleBulkBtn()"></td>
-            <td>{s.date_time}</td>
-            <td><strong>{s.name}</strong></td>
-            <td>{s.venue_name}</td>
-        </tr>"""
+    manage_rows = "".join([f'<tr><td><input type="checkbox" class="show-check" value="{s.tm_id}" onchange="toggleBulkBtn()"></td><td>{s.date_time}</td><td><strong>{s.name}</strong></td><td>{s.venue_name}</td></tr>' for s in manual_shows])
 
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
     <style>
@@ -327,39 +327,23 @@ def admin_page():
 
                 for (let i = 0; i < lines.length; i++) {{
                     let line = lines[i];
-                    // Match date like "SAT May 2, 2026"
                     const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d+/i);
-                    
                     if (dateMatch) {{
                         let dateStr = dateMatch[0];
                         let bandName = "Unknown Band";
                         let venueName = defVenue || "Unknown Venue";
-
-                        // AXS Format: Date Line -> Band Line -> Venue/Location Line
                         if (lines[i+1]) {{
                             bandName = lines[i+1];
                             if (lines[i+2]) {{
-                                // Split by " - " or "," to isolate the venue name from city/state
                                 let locRaw = lines[i+2].split(' - ')[0].split(',')[0];
-                                venueName = locRaw
-                                    .replace('Heaven at ', '')
-                                    .replace('Hell at ', '')
-                                    .replace('Purgatory at ', '')
-                                    .trim();
-                                i += 2; // Skip processed lines
-                            }} else {{
-                                i += 1;
-                            }}
+                                venueName = locRaw.replace('Heaven at ', '').replace('Hell at ', '').replace('Purgatory at ', '').trim();
+                                i += 2;
+                            }} else i += 1;
                         }}
-
                         const div = document.createElement('div');
                         div.className = 'bulk-row';
                         div.style = "display:flex; gap:10px; margin-bottom:5px;";
-                        div.innerHTML = `
-                            <input type="text" class="b-name" value="${{bandName}}" style="flex:2">
-                            <input type="text" class="b-date" value="${{dateStr}}" style="flex:1">
-                            <input type="text" class="b-venue" value="${{venueName}}" style="flex:2">
-                        `;
+                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}" style="flex:2"><input type="text" class="b-date" value="${{dateStr}}" style="flex:1"><input type="text" class="b-venue" value="${{venueName}}" style="flex:2">`;
                         list.appendChild(div);
                     }}
                 }}
@@ -367,31 +351,30 @@ def admin_page():
             }}
 
             async function uploadBulk() {{
-                const rows = document.querySelectorAll('.bulk-row');
-                const payload = Array.from(rows).map(r => ({{
+                const payload = Array.from(document.querySelectorAll('.bulk-row')).map(r => ({{
                     name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value, venue: r.querySelector('.b-venue').value
                 }}));
                 await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
                 location.reload();
             }}
 
-            function toggleSelectAll() {{
+            window.toggleSelectAll = function() {{
                 const checked = document.getElementById('select-all').checked;
                 document.querySelectorAll('.show-check').forEach(cb => cb.checked = checked);
                 toggleBulkBtn();
-            }}
+            }};
 
-            function toggleBulkBtn() {{
+            window.toggleBulkBtn = function() {{
                 document.getElementById('bulk-del-btn').disabled = document.querySelectorAll('.show-check:checked').length === 0;
-            }}
+            }};
 
-            async function deleteSelected() {{
+            window.deleteSelected = async function() {{
                 const selected = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
                 if(confirm("Delete selected?")) {{
                     await fetch('/admin/delete-bulk', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(selected) }});
                     location.reload();
                 }}
-            }}
+            }};
         </script>
     </body></html>"""
 
