@@ -51,11 +51,16 @@ COMMON_STYLE = """
     .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; border-radius: 8px; }
     .admin-btn:hover { background: #222; }
     
-    .clear-link { color: #444444; font-size: 0.75rem; cursor: pointer; margin-top: 10px; display: inline-block; text-decoration: none; font-weight: 500; }
+    .clear-link { color: #444444; font-size: 0.75rem; cursor: pointer; display: inline-block; text-decoration: none; font-weight: 500; }
     .clear-link:hover { text-decoration: underline; }
 
     .venue-fav-btn { height: 48px; width: 48px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
     .hidden { display: none !important; }
+    
+    /* Harmonized Filter Buttons */
+    .tab-btn, .fav-toggle { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 42px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; vertical-align: top; }
+    .tab-btn.active { background: #444; color: white; }
+    .fav-toggle.active { background: var(--gold); color: #442c00; }
 </style>
 """
 
@@ -92,14 +97,8 @@ def read_root():
         return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1000, user-scalable=yes">
                 <title>ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
                 <style>
-                    .filter-bar {{ display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 15px; }}
-                    .btn-group {{ display: flex; gap: 5px; }}
-                    /* Harmonized button heights */
-                    .tab-btn, .fav-toggle {{ background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 42px; display: flex; align-items: center; justify-content: center; }}
-                    .tab-btn.active {{ background: #444; color: white; }}
-                    .fav-toggle.active {{ background: var(--gold); color: #442c00; }}
-                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; margin-bottom: 8px; }}
-                    table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }}
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; }}
+                    table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 10px; }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; }}
                     td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
                     .event-row:hover {{ background: var(--row-hover); }}
@@ -111,34 +110,39 @@ def read_root():
             <body><header><h1>ATL Show Finder</h1></header>
                 <div class="container">
                     <div class="controls-box">
-                        <div style="display:flex; gap:20px; align-items: flex-start;">
+                        <div style="display:flex; gap:20px; margin-bottom: 15px;">
                             <div style="flex: 1;">
                                 <input type="text" id="search" class="search-input" placeholder="Search bands...">
                             </div>
-                            <div style="flex: 1; display:flex; flex-direction:column; gap:8px;">
-                                <div style="display:flex; gap:8px; width:100%;">
-                                    <select id="venue-select" class="search-input">{venue_options}</select>
-                                    <button id="venue-star" class="venue-fav-btn">★</button>
-                                </div>
-                                <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
-                                <span class="clear-link" style="margin:0; text-align:right; cursor: default;">Click on a venue from the list and add it to your favorites</span>
+                            <div style="flex: 1; display:flex; gap:8px;">
+                                <select id="venue-select" class="search-input">{venue_options}</select>
+                                <button id="venue-star" class="venue-fav-btn">★</button>
                             </div>
                         </div>
 
-                        <div class="filter-bar">
-                            <div class="btn-group">
+                        <div style="display:flex; gap:20px; align-items: flex-start;">
+                            <div style="flex: 1; display:flex; gap:5px;">
                                 <button class="tab-btn active" data-filter="all">ALL</button>
                                 <button class="tab-btn" data-filter="month">MONTHLY</button>
                                 <button class="tab-btn" data-filter="today">DAILY</button>
                                 <button id="fav-filter" class="fav-toggle">STARRED SHOWS ★</button>
+                                <div id="nav-group" class="hidden" style="display:flex; align-items:center; gap:5px;">
+                                    <button class="tab-btn" onclick="moveDate(-1)">←</button>
+                                    <span id="view-label" class="view-label"></span>
+                                    <button class="tab-btn" onclick="moveDate(1)">→</button>
+                                </div>
                             </div>
-                            <div id="nav-group" class="nav-controls hidden" style="display:flex; align-items:center; gap:10px;">
-                                <button class="tab-btn" onclick="moveDate(-1)">←</button>
-                                <span id="view-label" class="view-label"></span>
-                                <button class="tab-btn" onclick="moveDate(1)">→</button>
+                            
+                            <div style="flex: 1; display:flex; flex-direction:column; gap:8px;">
+                                <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
+                                <span class="clear-link" style="text-align:right; cursor: default;">Click on a venue from the list and add it to your favorites</span>
                             </div>
                         </div>
-                        <span class="clear-link" id="clear-btn" style="display:block;">Clear All Stars</span>
+                        
+                        <div style="margin-top: 15px; display: flex; justify-content: space-between;">
+                            <span class="clear-link" id="clear-btn">Clear All Stars</span>
+                            <a href="/admin" class="clear-link" style="color: #999;">Admin Panel</a>
+                        </div>
                     </div>
                     <table><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
                     <tbody id="event-body">{rows}</tbody></table>
@@ -263,11 +267,6 @@ def read_root():
     finally:
         db.close()
 
-# --- ADMIN PANEL ROUTES REMAIN THE SAME ---
-
-# --- ADMIN PANEL ROUTES --- (Keep your existing admin logic below)
-# ...
-
 # --- ADMIN PANEL ROUTES ---
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -285,40 +284,40 @@ def admin_page():
             <td>{s.venue_name}</td>
         </tr>"""
 
-    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}</head>
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
+    <style>
+        .bulk-row input {{ border: 1px solid #ddd; padding: 10px; border-radius: 6px; }}
+        .manage-table th, .manage-table td {{ padding: 12px; border-bottom: 1px solid #eee; }}
+    </style></head>
     <body><header><h1>Admin Panel</h1></header>
         <div class="container">
             <div class="controls-box">
                 <h3>Bulk Paste Shows</h3>
-                <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Paste AXS data or manual text (Jan 15 - Band - Venue)</p>
-                <textarea id="bulk-input" placeholder="Paste show data here..."></textarea>
+                <textarea id="bulk-input" placeholder="Paste AXS or list data..." style="width:100%; min-height:150px; margin-bottom:10px;"></textarea>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="bulk-venue" placeholder="Default Venue (optional)" style="flex-grow:1;">
-                    <button type="button" class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
+                    <input type="text" id="bulk-venue" placeholder="Default Venue" style="flex-grow:1; padding:10px; border-radius:6px; border:1px solid #ddd;">
+                    <button class="admin-btn" onclick="parseBulk()" style="background:var(--primary);">Parse Text</button>
                 </div>
-                <div id="preview-area" class="hidden" style="margin-top:30px;">
+                <div id="preview-area" class="hidden" style="margin-top:20px;">
                     <div id="bulk-list"></div>
-                    <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%; margin-top:20px;">Upload All Shows</button>
+                    <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%; margin-top:20px;">Save All</button>
                 </div>
             </div>
 
             <div class="controls-box">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3>Manage Manual Shows</h3>
-                    <button id="bulk-del-btn" class="del-btn-multi" disabled onclick="deleteSelected()">Delete Selected</button>
+                    <h3>Manual Shows</h3>
+                    <button id="bulk-del-btn" class="del-btn-multi" style="background:var(--danger); border:none; color:white; padding:8px 15px; border-radius:6px; cursor:pointer;" disabled onclick="deleteSelected()">Delete Selected</button>
                 </div>
-                <table class="manage-table">
-                    <thead><tr>
+                <table class="manage-table" style="width:100%; border-collapse: collapse; margin-top:15px;">
+                    <thead><tr style="text-align:left;">
                         <th><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
                         <th>Date</th><th>Band</th><th>Venue</th>
                     </tr></thead>
                     <tbody>{manage_rows}</tbody>
                 </table>
             </div>
-            
-            <div style="text-align:center; padding-bottom:40px;">
-                <a href="/" class="admin-btn" style="background:#eee; color:#666;">← Back to Site</a>
-            </div>
+            <div style="text-align:center; padding:20px;"><a href="/" class="admin-btn" style="background:#eee; color:#666; text-decoration:none;">← Back</a></div>
         </div>
         <script>
             function parseBulk() {{
@@ -332,27 +331,14 @@ def admin_page():
                 for (let i = 0; i < lines.length; i++) {{
                     let line = lines[i];
                     const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d+/i);
-                    
                     if (dateMatch) {{
                         let dateStr = dateMatch[0];
-                        let bandName = "";
-                        let venueName = defVenue;
-
-                        if (lines[i+1] && !lines[i+1].includes(':00 PM') && !lines[i+1].match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i)) {{
-                            bandName = lines[i+1];
-                            if (lines[i+2] && (lines[i+2].includes('Atlanta') || lines[i+2].includes('GA'))) {{
-                                venueName = lines[i+2].split(',')[0].replace('Heaven at ', '').replace('Hell at ', '').replace('Purgatory at ', '').trim();
-                                i += 2;
-                            }} else {{
-                                i += 1;
-                            }}
-                        }} else {{
-                            bandName = line.replace(dateStr, '').replace(/[@\\-]/g, '').trim();
-                        }}
-
+                        let bandName = lines[i+1] || "Unknown Band";
+                        let venueName = defVenue || "Unknown Venue";
                         const div = document.createElement('div');
                         div.className = 'bulk-row';
-                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}"><input type="text" class="b-date" value="${{dateStr}}"><input type="text" class="b-venue" value="${{venueName}}"><input type="text" class="b-url" placeholder="Link">`;
+                        div.style = "display:flex; gap:10px; margin-bottom:5px;";
+                        div.innerHTML = `<input type="text" class="b-name" value="${{bandName}}" style="flex:2"><input type="text" class="b-date" value="${{dateStr}}" style="flex:1"><input type="text" class="b-venue" value="${{venueName}}" style="flex:2">`;
                         list.appendChild(div);
                     }}
                 }}
@@ -362,11 +348,10 @@ def admin_page():
             async function uploadBulk() {{
                 const rows = document.querySelectorAll('.bulk-row');
                 const payload = Array.from(rows).map(r => ({{
-                    name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value,
-                    venue: r.querySelector('.b-venue').value, url: r.querySelector('.b-url').value
+                    name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value, venue: r.querySelector('.b-venue').value
                 }}));
-                const resp = await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
-                if (resp.ok) location.reload();
+                await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+                location.reload();
             }}
 
             function toggleSelectAll() {{
@@ -376,19 +361,15 @@ def admin_page():
             }}
 
             function toggleBulkBtn() {{
-                const anyChecked = document.querySelectorAll('.show-check:checked').length > 0;
-                document.getElementById('bulk-del-btn').disabled = !anyChecked;
+                document.getElementById('bulk-del-btn').disabled = document.querySelectorAll('.show-check:checked').length === 0;
             }}
 
             async function deleteSelected() {{
                 const selected = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
-                if(!confirm(`Delete ${{selected.length}} shows?`)) return;
-                const resp = await fetch('/admin/delete-bulk', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify(selected)
-                }});
-                if (resp.ok) location.reload();
+                if(confirm("Delete selected?")) {{
+                    await fetch('/admin/delete-bulk', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(selected) }});
+                    location.reload();
+                }}
             }}
         </script>
     </body></html>"""
@@ -403,21 +384,13 @@ async def delete_bulk(ids: list = Body(...)):
 @app.post("/admin/bulk-save")
 async def bulk_save(data: list = Body(...)):
     db = SessionLocal()
-    current_date = date.today()
+    current_year = date.today().year
     for item in data:
         try:
-            name, raw_date, venue = item.get('name'), item.get('date'), item.get('venue')
-            if "/" in raw_date: dt = datetime.strptime(f"{current_date.year}/{raw_date}", "%Y/%m/%d")
-            else: dt = datetime.strptime(f"{current_date.year} {raw_date}", "%Y %b %d")
-            
-            # Year rollover logic: If the parsed date is more than 6 months in the past,
-            # it's likely a show for next year.
-            if dt.date() < current_date.replace(month=current_date.month - 6 if current_date.month > 6 else 1):
-                dt = dt.replace(year=current_date.year + 1)
-                
-            final_date = dt.date()
-            tm_id = f"manual-{name.replace(' ', '')}-{final_date.isoformat()}"
-            db.merge(Event(tm_id=tm_id, name=name, date_time=final_date, venue_name=venue, ticket_url=item.get('url', '')))
+            dt = datetime.strptime(f"{current_year} {item['date']}", "%Y %b %d")
+            if dt.date() < date.today(): dt = dt.replace(year=current_year + 1)
+            tm_id = f"manual-{item['name'].replace(' ', '')}-{dt.date().isoformat()}"
+            db.merge(Event(tm_id=tm_id, name=item['name'], date_time=dt.date(), venue_name=item['venue']))
         except: continue
     db.commit(); db.close()
     return {"status": "ok"}
