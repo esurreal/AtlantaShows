@@ -44,7 +44,7 @@ COMMON_STYLE = """
     .container { max-width: 1000px; margin: auto; }
     header { text-align: center; padding: 40px 0 30px 0; }
     h1 { font-family: "Baskerville", serif; font-weight: 400; font-size: 3.5rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase; }
-    .controls-box { background: var(--card-bg); padding: 30px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .controls-box { background: var(--card-bg); padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     
     .search-input { height: 48px; width: 100%; padding: 0 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
     
@@ -60,6 +60,8 @@ COMMON_STYLE = """
     .tab-btn, .fav-toggle { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 42px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; vertical-align: top; }
     .tab-btn.active { background: #444; color: white; }
     .fav-toggle.active { background: var(--gold); color: #442c00; }
+    
+    .nav-row { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0; }
 </style>
 """
 
@@ -86,7 +88,6 @@ def read_root():
             full_lineup = " / ".join(sorted(list(data["artists"])))
             safe_id = f"{event_date.isoformat()}-{venue.replace(' ', '-').lower()}"
             filter_v = "The Masquerade" if "Masquerade" in venue else ("Center Stage / Loft / Vinyl" if any(x in venue for x in ["Center Stage", "The Loft", "Vinyl"]) else venue)
-            # Store date info in attributes for faster JS access
             rows += f"""<tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_v}" data-month="{event_date.month-1}" data-year="{event_date.year}">
                 <td><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
@@ -97,7 +98,7 @@ def read_root():
         return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=1000, user-scalable=yes">
                 <title>ATL Show Finder</title><link rel="icon" type="image/png" href="/favicon.ico">{COMMON_STYLE}
                 <style>
-                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 140px; text-align: center; }}
+                    .view-label {{ font-weight: bold; color: var(--primary); min-width: 180px; text-align: center; font-size: 1rem; }}
                     table {{ width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 10px; }}
                     th {{ text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; }}
                     td {{ padding: 16px 15px; border-bottom: 1px solid var(--border); }}
@@ -111,9 +112,7 @@ def read_root():
                 <div class="container">
                     <div class="controls-box">
                         <div style="display:flex; gap:20px; margin-bottom: 15px;">
-                            <div style="flex: 1;">
-                                <input type="text" id="search" class="search-input" placeholder="Search bands...">
-                            </div>
+                            <div style="flex: 1;"><input type="text" id="search" class="search-input" placeholder="Search bands..."></div>
                             <div style="flex: 1; display:flex; gap:8px;">
                                 <select id="venue-select" class="search-input">{venue_options}</select>
                                 <button id="venue-star" class="venue-fav-btn">★</button>
@@ -127,11 +126,6 @@ def read_root():
                                     <button class="tab-btn" data-filter="month">MONTHLY</button>
                                     <button class="tab-btn" data-filter="today">DAILY</button>
                                     <button id="fav-filter" class="fav-toggle">STARRED SHOWS ★</button>
-                                    <div id="nav-group" class="hidden" style="display:flex; align-items:center; gap:5px;">
-                                        <button class="tab-btn" onclick="moveDate(-1)">←</button>
-                                        <span id="view-label" class="view-label"></span>
-                                        <button class="tab-btn" onclick="moveDate(1)">→</button>
-                                    </div>
                                 </div>
                                 <span class="clear-link" id="clear-btn" style="text-align:left; margin-left: 5px;">Clear All Stars</span>
                             </div>
@@ -140,6 +134,12 @@ def read_root():
                                 <button id="fav-venue-filter" class="fav-toggle" style="width:100%;">FAV VENUES ★</button>
                                 <span class="clear-link" style="text-align:right; cursor: default; margin-right: 5px;">Click on a venue from the list and add it to your favorites</span>
                             </div>
+                        </div>
+
+                        <div id="nav-row" class="nav-row hidden">
+                            <button class="tab-btn" id="prev-btn">←</button>
+                            <span id="view-label" class="view-label"></span>
+                            <button class="tab-btn" id="next-btn">→</button>
                         </div>
                     </div>
                     <table id="main-table"><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
@@ -152,7 +152,6 @@ def read_root():
                     const eventBody = document.getElementById('event-body');
 
                     function runFilters() {{
-                        // Prevent layout thrashing by hiding the body during calc if it's a huge list
                         if (allRows.length > 500) eventBody.style.display = 'none';
 
                         const q = document.getElementById('search').value.toUpperCase();
@@ -163,8 +162,7 @@ def read_root():
                         const vYear = viewingDate.getFullYear();
                         const vDayStr = viewingDate.toISOString().split('T')[0];
 
-                        for (let i = 0; i < allRows.length; i++) {{
-                            const row = allRows[i];
+                        allRows.forEach(row => {{
                             const isStarred = row.classList.contains('is-highlighted');
                             const isFavVenue = favVenues.includes(row.dataset.venueFilter);
                             const txtM = row.innerText.toUpperCase().includes(q);
@@ -183,17 +181,16 @@ def read_root():
                             }} else if (currentTab === 'month') {{
                                 showRow = parseInt(row.dataset.month) === vMonth && parseInt(row.dataset.year) === vYear && matchesSearch;
                             }}
-                            
                             row.style.display = showRow ? "" : "none";
-                        }}
+                        }});
 
-                        const nav = document.getElementById('nav-group');
+                        const nav = document.getElementById('nav-row');
                         const lbl = document.getElementById('view-label');
                         if (currentTab === 'all' || starredOnly) nav.classList.add('hidden');
                         else {{
                             nav.classList.remove('hidden');
                             lbl.innerText = currentTab === 'today' ? 
-                                viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : 
+                                viewingDate.toLocaleDateString('en-US', {{weekday:'short', month:'short', day:'numeric'}}) : 
                                 viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}});
                         }}
 
@@ -221,14 +218,15 @@ def read_root():
                         runFilters();
                     }};
 
-                    window.moveDate = function(dir) {{
+                    function moveDate(dir) {{
                         if (currentTab === 'today') viewingDate.setDate(viewingDate.getDate() + dir);
                         else viewingDate.setMonth(viewingDate.getMonth() + dir);
                         runFilters();
-                    }};
+                    }}
+                    document.getElementById('prev-btn').onclick = () => moveDate(-1);
+                    document.getElementById('next-btn').onclick = () => moveDate(1);
 
-                    document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {{
-                        if (!e.target.dataset.filter) return;
+                    document.querySelectorAll('.tab-btn[data-filter]').forEach(b => b.onclick = (e) => {{
                         starredOnly = false;
                         venueFavsOnly = false;
                         document.getElementById('fav-filter').classList.remove('active');
