@@ -86,7 +86,8 @@ def read_root():
             full_lineup = " / ".join(sorted(list(data["artists"])))
             safe_id = f"{event_date.isoformat()}-{venue.replace(' ', '-').lower()}"
             filter_v = "The Masquerade" if "Masquerade" in venue else ("Center Stage / Loft / Vinyl" if any(x in venue for x in ["Center Stage", "The Loft", "Vinyl"]) else venue)
-            rows += f"""<tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_v}">
+            # Store date info in attributes for faster JS access
+            rows += f"""<tr class="event-row" id="row-{safe_id}" data-date="{event_date.isoformat()}" data-venue-filter="{filter_v}" data-month="{event_date.month-1}" data-year="{event_date.year}">
                 <td><button class="star-btn" data-id="{safe_id}">★</button></td>
                 <td class="date-cell">{event_date.strftime('%a, %b %d')}</td>
                 <td class="lineup-cell"><strong>{full_lineup}</strong></td>
@@ -141,24 +142,29 @@ def read_root():
                             </div>
                         </div>
                     </div>
-                    <table><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
+                    <table id="main-table"><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
                     <tbody id="event-body">{rows}</tbody></table>
                 </div>
                 <script>
                     let currentTab = 'all', starredOnly = false, venueFavsOnly = false;
                     let viewingDate = new Date(); viewingDate.setHours(0,0,0,0);
-                    const rows = Array.from(document.querySelectorAll('.event-row'));
+                    const allRows = Array.from(document.querySelectorAll('.event-row'));
+                    const eventBody = document.getElementById('event-body');
 
                     function runFilters() {{
+                        // Prevent layout thrashing by hiding the body during calc if it's a huge list
+                        if (allRows.length > 500) eventBody.style.display = 'none';
+
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
                         const favVenues = JSON.parse(localStorage.getItem('atl_venue_stars')) || [];
                         
-                        const viewMonth = viewingDate.getMonth();
-                        const viewYear = viewingDate.getFullYear();
-                        const viewDayStr = viewingDate.toDateString();
+                        const vMonth = viewingDate.getMonth();
+                        const vYear = viewingDate.getFullYear();
+                        const vDayStr = viewingDate.toISOString().split('T')[0];
 
-                        rows.forEach(row => {{
+                        for (let i = 0; i < allRows.length; i++) {{
+                            const row = allRows[i];
                             const isStarred = row.classList.contains('is-highlighted');
                             const isFavVenue = favVenues.includes(row.dataset.venueFilter);
                             const txtM = row.innerText.toUpperCase().includes(q);
@@ -172,16 +178,14 @@ def read_root():
                                 showRow = isStarred && matchesSearch;
                             }} else if (currentTab === 'all') {{
                                 showRow = matchesSearch;
-                            }} else {{
-                                const rDate = new Date(row.dataset.date + 'T00:00:00');
-                                if (currentTab === 'today') {{
-                                    showRow = rDate.toDateString() === viewDayStr && matchesSearch;
-                                }} else if (currentTab === 'month') {{
-                                    showRow = rDate.getMonth() === viewMonth && rDate.getFullYear() === viewYear && matchesSearch;
-                                }}
+                            }} else if (currentTab === 'today') {{
+                                showRow = row.dataset.date === vDayStr && matchesSearch;
+                            }} else if (currentTab === 'month') {{
+                                showRow = parseInt(row.dataset.month) === vMonth && parseInt(row.dataset.year) === vYear && matchesSearch;
                             }}
+                            
                             row.style.display = showRow ? "" : "none";
-                        }});
+                        }}
 
                         const nav = document.getElementById('nav-group');
                         const lbl = document.getElementById('view-label');
@@ -196,6 +200,8 @@ def read_root():
                         const vStar = document.getElementById('venue-star');
                         vStar.style.color = favVenues.includes(vSel) ? "var(--gold)" : "#ddd";
                         vStar.style.display = vSel === 'all' ? "none" : "block";
+
+                        if (allRows.length > 500) eventBody.style.display = '';
                     }}
 
                     document.getElementById('venue-star').onclick = function() {{
@@ -221,7 +227,7 @@ def read_root():
                         runFilters();
                     }};
 
-                    document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', e => {{
+                    document.querySelectorAll('.tab-btn').forEach(b => b.onclick = (e) => {{
                         if (!e.target.dataset.filter) return;
                         starredOnly = false;
                         venueFavsOnly = false;
@@ -231,7 +237,7 @@ def read_root():
                         e.target.classList.add('active');
                         currentTab = e.target.dataset.filter;
                         runFilters();
-                    }}));
+                    }});
 
                     document.getElementById('fav-filter').onclick = function() {{
                         starredOnly = !starredOnly;
@@ -239,8 +245,8 @@ def read_root():
                         runFilters();
                     }};
 
-                    document.getElementById('search').addEventListener('input', runFilters);
-                    document.getElementById('venue-select').addEventListener('change', runFilters);
+                    document.getElementById('search').oninput = runFilters;
+                    document.getElementById('venue-select').onchange = runFilters;
                     
                     document.addEventListener('click', e => {{
                         if (e.target.classList.contains('star-btn')) {{
@@ -256,8 +262,7 @@ def read_root():
 
                     document.getElementById('clear-btn').onclick = () => {{
                         if(confirm("Clear stars and venue favorites?")) {{
-                            localStorage.removeItem('atl_stars');
-                            localStorage.removeItem('atl_venue_stars');
+                            localStorage.clear();
                             location.reload();
                         }}
                     }};
