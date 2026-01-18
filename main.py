@@ -204,6 +204,10 @@ def read_root():
                     document.getElementById('fav-venue-filter').onclick = function() {{
                         venueFavsOnly = !venueFavsOnly;
                         this.classList.toggle('active');
+                        // Reset venue dropdown to "all" when filtering by favorites
+                        if (venueFavsOnly) {{
+                            document.getElementById('venue-select').value = 'all';
+                        }}
                         runFilters();
                     }};
 
