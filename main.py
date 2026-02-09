@@ -161,7 +161,7 @@ def read_root():
     finally:
         db.close()
 
-@app.get("/admin", response_class=HTMLResponse)
+@app.get("/theking", response_class=HTMLResponse)
 def admin_page():
     db = SessionLocal()
     manual_shows = db.query(Event).filter(Event.tm_id.like('manual-%')).order_by(Event.date_time).all()
@@ -268,7 +268,7 @@ def admin_page():
         }}
     </script></body></html>"""
 
-@app.post("/admin/bulk-save")
+@app.post("/theking/bulk-save")
 async def bulk_save(data: list = Body(...)):
     db = SessionLocal()
     current_year = 2026
@@ -284,7 +284,7 @@ async def bulk_save(data: list = Body(...)):
     db.commit(); db.close()
     return {"status": "ok"}
 
-@app.post("/admin/delete-bulk")
+@app.post("/theking/delete-bulk")
 async def delete_bulk(ids: list = Body(...)):
     db = SessionLocal()
     db.query(Event).filter(Event.tm_id.in_(ids)).delete(synchronize_session=False)
