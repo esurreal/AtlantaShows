@@ -67,8 +67,8 @@ def read_root():
         for e in raw_events:
             v_filter = "The Masquerade" if "Masquerade" in e.venue_name else ("Center Stage / Loft / Vinyl" if any(x in e.venue_name for x in ["Center Stage", "The Loft", "Vinyl"]) else e.venue_name)
             unique_venues.add(v_filter)
-            rows += f"""<tr class="event-row" data-date="{e.date_time.isoformat()}" data-venue="{v_filter}" data-month="{e.date_time.month-1}" data-content="{e.name.upper()}">
-                <td><button class="star-btn" onclick="this.closest('tr').classList.toggle('is-highlighted')">★</button></td>
+            rows += f"""<tr class="event-row" id="row-{e.tm_id}" data-id="{e.tm_id}" data-date="{e.date_time.isoformat()}" data-venue="{v_filter}" data-month="{e.date_time.month-1}" data-content="{e.name.upper()}">
+                <td><button class="star-btn" onclick="toggleStar('{e.tm_id}')">★</button></td>
                 <td style="width:110px; font-weight:700; color:#888;">{e.date_time.strftime('%a, %b %d')}</td>
                 <td><strong>{e.name}</strong></td>
                 <td>{e.venue_name}</td>
@@ -102,6 +102,14 @@ def read_root():
                     const allRows = Array.from(document.getElementsByClassName('event-row'));
                     let currentTab = 'all', starredOnly = false, viewingDate = new Date();
                     viewingDate.setHours(0,0,0,0);
+                    let starredIds = new Set();
+
+                    function toggleStar(id) {{
+                        const row = document.getElementById('row-' + id);
+                        if (starredIds.has(id)) starredIds.delete(id);
+                        else starredIds.add(id);
+                        row.classList.toggle('is-highlighted');
+                    }}
 
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
@@ -109,9 +117,9 @@ def read_root():
                         const vMonth = viewingDate.getMonth();
                         const vDayStr = viewingDate.toISOString().split('T')[0];
 
-                        for(let i=0; i<allRows.length; i++) {{
-                            const row = allRows[i];
-                            const isStarred = row.classList.contains('is-highlighted');
+                        allRows.forEach(row => {{
+                            const id = row.dataset.id;
+                            const isStarred = starredIds.has(id);
                             const matchTxt = !q || row.dataset.content.includes(q);
                             const matchVen = vSel === 'all' || row.dataset.venue === vSel;
                             
@@ -122,7 +130,7 @@ def read_root():
                                 else if (currentTab === 'month') show = parseInt(row.dataset.month) === vMonth;
                             }}
                             row.className = show ? 'event-row' + (isStarred ? ' is-highlighted' : '') : 'event-row hidden';
-                        }}
+                        }});
                         document.getElementById('nav-row').style.display = (currentTab === 'all' || starredOnly) ? 'none' : 'flex';
                         document.getElementById('view-label').innerText = currentTab === 'today' ? viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : viewingDate.toLocaleDateString('en-US', {{month:'long'}});
                     }}
@@ -137,7 +145,6 @@ def read_root():
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active'); 
                         currentTab = e.target.dataset.filter;
-                        // Turn off Starred filter when switching time views
                         starredOnly = false;
                         document.getElementById('fav-filter').classList.remove('active');
                         runFilters();
@@ -167,10 +174,23 @@ def admin_page():
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin</title>{COMMON_STYLE}</head>
     <body><div class="container">
         <header><h1>ADMIN PANEL</h1></header>
+        
+        <div class="controls-box">
+            <h3>Option 1: Manual Parser</h3>
+            <p style="font-size:0.8rem; color:#888;">Format: Band Name | Date | Venue</p>
+            <textarea id="bulk-input" style="height:100px;"></textarea>
+            <button class="admin-btn" onclick="quickParse()" style="background:var(--primary);">Process List</button>
+        </div>
+
         <div class="controls-box">
             <h3>Option 2: Direct Inject (JSON)</h3>
-            <textarea id="json-input" style="height:80px;"></textarea>
+            <textarea id="json-input" style="height:60px;"></textarea>
             <button class="admin-btn" onclick="injectJSON()" style="background:#6f42c1;">Inject Data</button>
+        </div>
+
+        <div id="preview-area" class="controls-box hidden">
+            <div id="bulk-list"></div>
+            <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%;">Save to Database</button>
         </div>
         
         <div class="controls-box">
@@ -194,6 +214,29 @@ def admin_page():
         </div>
     </div>
     <script>
+        function quickParse() {{
+            const raw = document.getElementById('bulk-input').value;
+            const list = document.getElementById('bulk-list');
+            list.innerHTML = '';
+            raw.split('\\n').forEach(line => {{
+                if(!line.includes('|')) return;
+                const [n, d, v] = line.split('|').map(s => s.trim());
+                const div = document.createElement('div');
+                div.className = 'bulk-row'; div.style="display:flex; gap:10px; margin-bottom:5px;";
+                div.innerHTML = `<input type="text" class="b-name" value="${{n}}" style="flex:2"><input type="text" class="b-date" value="${{d}}" style="flex:1"><input type="text" class="b-venue" value="${{v}}" style="flex:2">`;
+                list.appendChild(div);
+            }});
+            document.getElementById('preview-area').classList.remove('hidden');
+        }}
+
+        async function uploadBulk() {{
+            const payload = Array.from(document.querySelectorAll('.bulk-row')).map(r => ({{
+                name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value, venue: r.querySelector('.b-venue').value
+            }}));
+            await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+            location.reload();
+        }}
+
         async function injectJSON() {{
             try {{
                 const data = JSON.parse(document.getElementById('json-input').value);
