@@ -39,17 +39,20 @@ COMMON_STYLE = """
     header { text-align: center; padding: 20px 0; }
     h1 { font-family: "Baskerville", serif; font-weight: 400; font-size: 3rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase; }
     .controls-box { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); position: sticky; top: 10px; z-index: 100; }
-    .search-input { height: 44px; width: 100%; padding: 0 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
-    .tab-btn, .fav-toggle { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 38px; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    .search-input { height: 44px; padding: 0 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
+    .tab-btn, .fav-toggle, .admin-btn { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 38px; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s; }
     .tab-btn.active { background: #444; color: white; }
     .fav-toggle.active { background: var(--gold); color: #442c00; }
+    .admin-btn { background: #444; color: white; margin-top: 10px; }
     .nav-row { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0; }
     .hidden { display: none !important; }
     table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; color: #888; font-size: 0.7rem; text-transform: uppercase; }
     td { padding: 12px 15px; border-bottom: 1px solid var(--border); }
     .is-highlighted { background: var(--highlight-bg) !important; }
     .star-btn { background: none; border: none; color: #ccc; font-size: 1.2rem; cursor: pointer; }
     .is-highlighted .star-btn { color: var(--gold); }
+    textarea { width: 100%; font-family: monospace; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; background: #fafafa; }
 </style>
 """
 
@@ -64,7 +67,6 @@ def read_root():
         for e in raw_events:
             v_filter = "The Masquerade" if "Masquerade" in e.venue_name else ("Center Stage / Loft / Vinyl" if any(x in e.venue_name for x in ["Center Stage", "The Loft", "Vinyl"]) else e.venue_name)
             unique_venues.add(v_filter)
-            safe_id = f"m-{e.tm_id}"
             rows += f"""<tr class="event-row" data-date="{e.date_time.isoformat()}" data-venue="{v_filter}" data-month="{e.date_time.month-1}" data-content="{e.name.upper()}">
                 <td><button class="star-btn" onclick="this.closest('tr').classList.toggle('is-highlighted')">★</button></td>
                 <td style="width:110px; font-weight:700; color:#888;">{e.date_time.strftime('%a, %b %d')}</td>
@@ -74,13 +76,13 @@ def read_root():
         
         venue_options = f'<option value="all">All Venues</option>' + "".join([f'<option value="{v}">{v}</option>' for v in sorted(list(unique_venues))])
 
-        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{COMMON_STYLE}</head>
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ATL SHOWS</title>{COMMON_STYLE}</head>
             <body><header><h1>ATL SHOWS</h1></header>
                 <div class="container">
                     <div class="controls-box">
                         <div style="display:flex; gap:10px; margin-bottom: 10px;">
-                            <input type="text" id="search" class="search-input" placeholder="Search bands...">
-                            <select id="venue-select" class="search-input" style="width:200px;">{venue_options}</select>
+                            <input type="text" id="search" class="search-input" placeholder="Search bands..." style="flex:1;">
+                            <select id="venue-select" class="search-input" style="flex:1;">{venue_options}</select>
                         </div>
                         <div style="display:flex; gap:8px;">
                             <button class="tab-btn active" data-filter="all">ALL</button>
@@ -88,7 +90,7 @@ def read_root():
                             <button class="tab-btn" data-filter="today">DAILY</button>
                             <button id="fav-filter" class="fav-toggle">STARRED</button>
                         </div>
-                        <div id="nav-row" class="nav-row hidden">
+                        <div id="nav-row" class="nav-row" style="display:none;">
                             <button class="tab-btn" onclick="moveDate(-1)">←</button>
                             <span id="view-label" style="font-weight:bold; min-width:150px; text-align:center;"></span>
                             <button class="tab-btn" onclick="moveDate(1)">→</button>
@@ -134,7 +136,10 @@ def read_root():
                     document.querySelectorAll('.tab-btn[data-filter]').forEach(b => b.addEventListener('click', (e) => {{
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
                         e.target.classList.add('active'); 
-                        currentTab = e.target.dataset.filter; 
+                        currentTab = e.target.dataset.filter;
+                        // Turn off Starred filter when switching time views
+                        starredOnly = false;
+                        document.getElementById('fav-filter').classList.remove('active');
                         runFilters();
                     }}));
 
@@ -144,75 +149,76 @@ def read_root():
                         starredOnly = !starredOnly; this.classList.toggle('active'); runFilters(); 
                     }});
 
-                    // Initialize immediately
                     runFilters();
                 </script></body></html>"""
     finally:
         db.close()
 
-# ... [Keep Admin / Save / Delete routes same as before] ...
-
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page():
     db = SessionLocal()
     manual_shows = db.query(Event).filter(Event.tm_id.like('manual-%')).order_by(Event.date_time).all()
+    unique_venues = sorted(list(set(s.venue_name for s in manual_shows)))
     db.close()
-    rows = "".join([f'<tr><td><input type="checkbox" class="show-check" value="{s.tm_id}"></td><td>{s.date_time}</td><td>{s.name}</td><td>{s.venue_name}</td></tr>' for s in manual_shows])
+    
+    venue_options = '<option value="all">All Venues</option>' + "".join([f'<option value="{v}">{v}</option>' for v in unique_venues])
+    rows = "".join([f'<tr class="admin-row" data-venue="{s.venue_name}"><td><input type="checkbox" class="show-check" value="{s.tm_id}"></td><td>{s.date_time}</td><td>{s.name}</td><td>{s.venue_name}</td></tr>' for s in manual_shows])
 
-    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin Panel</title>{COMMON_STYLE}</head>
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin</title>{COMMON_STYLE}</head>
     <body><div class="container">
         <header><h1>ADMIN PANEL</h1></header>
         <div class="controls-box">
-            <h3>Option 1: Paste Formatted List</h3>
-            <p style="font-size:0.8rem; color:#888;">Format: Band Name | Feb 07 | Venue</p>
-            <textarea id="bulk-input" style="height:100px;"></textarea>
-            <button class="admin-btn" onclick="quickParse()" style="background:var(--primary);">Process List</button>
-        </div>
-        <div class="controls-box">
             <h3>Option 2: Direct Inject (JSON)</h3>
-            <textarea id="json-input" placeholder="Paste JSON from Gemini here..." style="height:80px;"></textarea>
-            <button class="admin-btn" onclick="injectJSON()" style="background:#6f42c1;">Inject Data Instantly</button>
+            <textarea id="json-input" style="height:80px;"></textarea>
+            <button class="admin-btn" onclick="injectJSON()" style="background:#6f42c1;">Inject Data</button>
         </div>
-        <div id="preview-area" class="controls-box hidden">
-            <div id="bulk-list"></div>
-            <button onclick="uploadBulk()" class="admin-btn" style="background:#28a745; width:100%;">Save to Database</button>
-        </div>
+        
         <div class="controls-box">
-            <button class="admin-btn" style="background:var(--danger);" onclick="deleteSelected()">Delete Selected</button>
-            <table>{rows}</table>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">Stored Manual Shows</h3>
+                <div style="display:flex; gap:10px;">
+                    <select id="admin-venue-filter" class="search-input" style="height:38px;">{venue_options}</select>
+                    <button class="admin-btn" style="background:var(--danger); margin:0;" onclick="deleteSelected()">Delete Selected</button>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="select-all" onclick="toggleAll(this)"></th>
+                        <th>Date</th><th>Band</th><th>Venue</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-tbody">{rows}</tbody>
+            </table>
             <br><a href="/" style="display:block; text-align:center;">Back to Home</a>
         </div>
     </div>
     <script>
-        function quickParse() {{
-            const raw = document.getElementById('bulk-input').value;
-            const list = document.getElementById('bulk-list');
-            list.innerHTML = '';
-            raw.split('\\n').forEach(line => {{
-                if(!line.includes('|')) return;
-                const [n, d, v] = line.split('|').map(s => s.trim());
-                const div = document.createElement('div');
-                div.className = 'bulk-row'; div.style="display:flex; gap:10px; margin-bottom:5px;";
-                div.innerHTML = `<input type="text" class="b-name" value="${{n}}" style="flex:2"><input type="text" class="b-date" value="${{d}}" style="flex:1"><input type="text" class="b-venue" value="${{v}}" style="flex:2">`;
-                list.appendChild(div);
-            }});
-            document.getElementById('preview-area').classList.remove('hidden');
-        }}
         async function injectJSON() {{
-            const data = JSON.parse(document.getElementById('json-input').value);
-            await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(data) }});
-            location.reload();
+            try {{
+                const data = JSON.parse(document.getElementById('json-input').value);
+                await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(data) }});
+                location.reload();
+            }} catch(e) {{ alert("Invalid JSON"); }}
         }}
-        async function uploadBulk() {{
-            const payload = Array.from(document.querySelectorAll('.bulk-row')).map(r => ({{
-                name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value, venue: r.querySelector('.b-venue').value
-            }}));
-            await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
-            location.reload();
+        
+        function toggleAll(master) {{
+            const checkboxes = document.querySelectorAll('.show-check');
+            checkboxes.forEach(cb => {{
+                if (cb.closest('tr').style.display !== 'none') cb.checked = master.checked;
+            }});
         }}
+
+        document.getElementById('admin-venue-filter').addEventListener('change', function() {{
+            const val = this.value;
+            document.querySelectorAll('.admin-row').forEach(row => {{
+                row.style.display = (val === 'all' || row.dataset.venue === val) ? '' : 'none';
+            }});
+        }});
+
         async function deleteSelected() {{
             const ids = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
-            if(confirm("Delete selected?")) {{
+            if(ids.length > 0 && confirm("Delete selected?")) {{
                 await fetch('/admin/delete-bulk', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(ids) }});
                 location.reload();
             }}
