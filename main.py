@@ -233,14 +233,14 @@ def admin_page():
             const payload = Array.from(document.querySelectorAll('.bulk-row')).map(r => ({{
                 name: r.querySelector('.b-name').value, date: r.querySelector('.b-date').value, venue: r.querySelector('.b-venue').value
             }}));
-            await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+            await fetch('/theking/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
             location.reload();
         }}
 
         async function injectJSON() {{
             try {{
                 const data = JSON.parse(document.getElementById('json-input').value);
-                await fetch('/admin/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(data) }});
+                await fetch('/theking/bulk-save', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(data) }});
                 location.reload();
             }} catch(e) {{ alert("Invalid JSON"); }}
         }}
@@ -262,7 +262,7 @@ def admin_page():
         async function deleteSelected() {{
             const ids = Array.from(document.querySelectorAll('.show-check:checked')).map(cb => cb.value);
             if(ids.length > 0 && confirm("Delete selected?")) {{
-                await fetch('/admin/delete-bulk', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(ids) }});
+                await fetch('/theking/delete-bulk', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(ids) }});
                 location.reload();
             }}
         }}
