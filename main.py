@@ -102,13 +102,27 @@ def read_root():
                     const allRows = Array.from(document.getElementsByClassName('event-row'));
                     let currentTab = 'all', starredOnly = false, viewingDate = new Date();
                     viewingDate.setHours(0,0,0,0);
-                    let starredIds = new Set();
+                    
+                    // --- PERSISTENCE LOGIC ---
+                    let starredIds = new Set(JSON.parse(localStorage.getItem('atl-shows-stars') || '[]'));
+
+                    function saveStars() {{
+                        localStorage.setItem('atl-shows-stars', JSON.stringify(Array.from(starredIds)));
+                    }}
 
                     function toggleStar(id) {{
                         const row = document.getElementById('row-' + id);
                         if (starredIds.has(id)) starredIds.delete(id);
                         else starredIds.add(id);
                         row.classList.toggle('is-highlighted');
+                        saveStars();
+                    }}
+
+                    function applyStarStyles() {{
+                        starredIds.forEach(id => {{
+                            const row = document.getElementById('row-' + id);
+                            if(row) row.classList.add('is-highlighted');
+                        }});
                     }}
 
                     function runFilters() {{
@@ -156,6 +170,8 @@ def read_root():
                         starredOnly = !starredOnly; this.classList.toggle('active'); runFilters(); 
                     }});
 
+                    // Initialize
+                    applyStarStyles();
                     runFilters();
                 </script></body></html>"""
     finally:
@@ -275,11 +291,16 @@ async def bulk_save(data: list = Body(...)):
     for item in data:
         try:
             ds = item['date'].strip()
-            fmt = "%Y %b %d" if len(ds.split()[0]) == 3 else "%Y %B %d"
-            dt = datetime.strptime(f"{current_year} {ds}", fmt)
-            if dt.date() < date.today(): dt = dt.replace(year=current_year + 1)
-            tm_id = f"manual-{item['name'].replace(' ', '')}-{dt.date().isoformat()}"
-            db.merge(Event(tm_id=tm_id, name=item['name'], date_time=dt.date(), venue_name=item['venue']))
+            # Handle both Mar 08 and 03-08-2026
+            if '-' in ds:
+                dt = datetime.strptime(ds, "%m-%d-%Y").date()
+            else:
+                fmt = "%Y %b %d" if len(ds.split()[0]) == 3 else "%Y %B %d"
+                dt = datetime.strptime(f"{current_year} {ds}", fmt).date()
+            
+            if dt < date.today(): dt = dt.replace(year=current_year + 1)
+            tm_id = f"manual-{item['name'].replace(' ', '')}-{dt.isoformat()}"
+            db.merge(Event(tm_id=tm_id, name=item['name'], date_time=dt, venue_name=item['venue']))
         except: continue
     db.commit(); db.close()
     return {"status": "ok"}
