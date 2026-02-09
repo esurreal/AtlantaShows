@@ -10,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 from collections import defaultdict
 from datetime import date, datetime
 
-# Database Setup
 Base = declarative_base()
 class Event(Base):
     __tablename__ = 'events'
@@ -27,13 +26,6 @@ Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(bind=engine)
 
 app = FastAPI()
-FAVICON_PATH = "atlshowFavicon.png"
-
-@app.get('/favicon.ico', include_in_schema=False)
-async def favicon():
-    if os.path.exists(FAVICON_PATH):
-        return FileResponse(FAVICON_PATH)
-    return None
 
 COMMON_STYLE = """
 <style>
@@ -44,24 +36,20 @@ COMMON_STYLE = """
     }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; min-width: 1000px; }
     .container { max-width: 1000px; margin: auto; }
-    header { text-align: center; padding: 40px 0 30px 0; }
-    h1 { font-family: "Baskerville", serif; font-weight: 400; font-size: 3.5rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase; }
-    .controls-box { background: var(--card-bg); padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .search-input { height: 48px; width: 100%; padding: 0 12px; background: #fff; border: 1px solid #ddd; color: var(--text); border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
-    .admin-btn { background: #444; color: white; cursor: pointer; font-weight: bold; border: none; padding: 12px 20px; text-decoration: none; display: inline-block; border-radius: 8px; margin-top: 10px;}
-    .hidden { display: none !important; }
-    textarea { width: 100%; font-family: monospace; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; background: #fafafa; }
-    .tab-btn, .fav-toggle { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 42px; display: inline-flex; align-items: center; justify-content: center; }
+    header { text-align: center; padding: 20px 0; }
+    h1 { font-family: "Baskerville", serif; font-weight: 400; font-size: 3rem; letter-spacing: 2px; color: #1a1a1a; margin: 0; text-transform: uppercase; }
+    .controls-box { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); position: sticky; top: 10px; z-index: 100; }
+    .search-input { height: 44px; width: 100%; padding: 0 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
+    .tab-btn, .fav-toggle { background: #eee; color: #666; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; height: 38px; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s; }
     .tab-btn.active { background: #444; color: white; }
+    .fav-toggle.active { background: var(--gold); color: #442c00; }
     .nav-row { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0; }
-    .view-label { font-weight: bold; color: var(--primary); min-width: 180px; text-align: center; }
-    table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 10px; }
-    th { text-align: left; border-bottom: 2px solid var(--border); padding: 15px; color: #999; font-size: 0.75rem; text-transform: uppercase; }
-    td { padding: 16px 15px; border-bottom: 1px solid var(--border); }
-    .event-row:hover { background: var(--row-hover); }
-    .is-highlighted { background: var(--highlight-bg) !important; border-left: 4px solid var(--gold); }
-    .star-btn { background: none; border: none; color: #eee; font-size: 1.4rem; cursor: pointer; }
-    .is-highlighted .star-btn { color: var(--gold) !important; }
+    .hidden { display: none !important; }
+    table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    td { padding: 12px 15px; border-bottom: 1px solid var(--border); }
+    .is-highlighted { background: var(--highlight-bg) !important; }
+    .star-btn { background: none; border: none; color: #ccc; font-size: 1.2rem; cursor: pointer; }
+    .is-highlighted .star-btn { color: var(--gold); }
 </style>
 """
 
@@ -74,80 +62,95 @@ def read_root():
         rows = ""
         unique_venues = set()
         for e in raw_events:
-            v_display = e.venue_name
-            v_filter = "The Masquerade" if "Masquerade" in v_display else ("Center Stage / Loft / Vinyl" if any(x in v_display for x in ["Center Stage", "The Loft", "Vinyl"]) else v_display)
+            v_filter = "The Masquerade" if "Masquerade" in e.venue_name else ("Center Stage / Loft / Vinyl" if any(x in e.venue_name for x in ["Center Stage", "The Loft", "Vinyl"]) else e.venue_name)
             unique_venues.add(v_filter)
-            safe_id = f"{e.date_time.isoformat()}-{e.tm_id}"
-            rows += f"""<tr class="event-row" id="row-{safe_id}" data-date="{e.date_time.isoformat()}" data-venue-filter="{v_filter}" data-month="{e.date_time.month-1}" data-year="{e.date_time.year}">
-                <td><button class="star-btn" data-id="{safe_id}">★</button></td>
-                <td style="font-weight:700; color:#777;">{e.date_time.strftime('%a, %b %d')}</td>
+            safe_id = f"m-{e.tm_id}"
+            rows += f"""<tr class="event-row" data-date="{e.date_time.isoformat()}" data-venue="{v_filter}" data-month="{e.date_time.month-1}" data-content="{e.name.upper()}">
+                <td><button class="star-btn" onclick="this.closest('tr').classList.toggle('is-highlighted')">★</button></td>
+                <td style="width:110px; font-weight:700; color:#888;">{e.date_time.strftime('%a, %b %d')}</td>
                 <td><strong>{e.name}</strong></td>
                 <td>{e.venue_name}</td>
                 <td><a href="{e.ticket_url or '#'}" target="_blank" style="color:var(--primary); font-weight:bold; text-decoration:none;">Tickets</a></td></tr>"""
         
         venue_options = f'<option value="all">All Venues</option>' + "".join([f'<option value="{v}">{v}</option>' for v in sorted(list(unique_venues))])
 
-        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ATL Show Finder</title>{COMMON_STYLE}</head>
-            <body><header><h1>ATL Show Finder</h1></header>
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{COMMON_STYLE}</head>
+            <body><header><h1>ATL SHOWS</h1></header>
                 <div class="container">
                     <div class="controls-box">
-                        <div style="display:flex; gap:20px; margin-bottom: 15px;">
-                            <input type="text" id="search" class="search-input" placeholder="Search bands..." style="flex:1;">
-                            <select id="venue-select" class="search-input" style="flex:1;">{venue_options}</select>
+                        <div style="display:flex; gap:10px; margin-bottom: 10px;">
+                            <input type="text" id="search" class="search-input" placeholder="Search bands...">
+                            <select id="venue-select" class="search-input" style="width:200px;">{venue_options}</select>
                         </div>
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; gap:8px;">
                             <button class="tab-btn active" data-filter="all">ALL</button>
                             <button class="tab-btn" data-filter="month">MONTHLY</button>
                             <button class="tab-btn" data-filter="today">DAILY</button>
-                            <button id="fav-filter" class="fav-toggle">STARRED ★</button>
+                            <button id="fav-filter" class="fav-toggle">STARRED</button>
                         </div>
                         <div id="nav-row" class="nav-row hidden">
                             <button class="tab-btn" onclick="moveDate(-1)">←</button>
-                            <span id="view-label" class="view-label"></span>
+                            <span id="view-label" style="font-weight:bold; min-width:150px; text-align:center;"></span>
                             <button class="tab-btn" onclick="moveDate(1)">→</button>
                         </div>
                     </div>
-                    <table><thead><tr><th></th><th>Date</th><th>Lineup</th><th>Venue</th><th>Link</th></tr></thead>
-                    <tbody id="event-body">{rows}</tbody></table>
+                    <table><tbody id="event-body">{rows}</tbody></table>
                 </div>
                 <script>
-                    let currentTab = 'all', starredOnly = false;
-                    let viewingDate = new Date(); viewingDate.setHours(0,0,0,0);
-                    const allRows = Array.from(document.querySelectorAll('.event-row'));
+                    const allRows = Array.from(document.getElementsByClassName('event-row'));
+                    let currentTab = 'all', starredOnly = false, viewingDate = new Date();
+                    viewingDate.setHours(0,0,0,0);
 
                     function runFilters() {{
                         const q = document.getElementById('search').value.toUpperCase();
                         const vSel = document.getElementById('venue-select').value;
-                        const vMonth = viewingDate.getMonth(), vDayStr = viewingDate.toISOString().split('T')[0];
+                        const vMonth = viewingDate.getMonth();
+                        const vDayStr = viewingDate.toISOString().split('T')[0];
 
-                        allRows.forEach(row => {{
+                        for(let i=0; i<allRows.length; i++) {{
+                            const row = allRows[i];
                             const isStarred = row.classList.contains('is-highlighted');
-                            const txtM = row.innerText.toUpperCase().includes(q);
-                            const venM = vSel === 'all' || row.dataset.venueFilter === vSel;
-                            let show = false;
-                            if (starredOnly) show = isStarred && txtM && venM;
-                            else if (currentTab === 'all') show = txtM && venM;
-                            else if (currentTab === 'today') show = row.dataset.date === vDayStr && txtM && venM;
-                            else if (currentTab === 'month') show = parseInt(row.dataset.month) === vMonth && txtM && venM;
-                            row.style.display = show ? "" : "none";
-                        }});
-                        document.getElementById('nav-row').className = (currentTab === 'all' || starredOnly) ? 'nav-row hidden' : 'nav-row';
-                        document.getElementById('view-label').innerText = currentTab === 'today' ? viewingDate.toLocaleDateString('en-US', {{weekday:'short', month:'short', day:'numeric'}}) : viewingDate.toLocaleDateString('en-US', {{month:'long', year:'numeric'}});
+                            const matchTxt = !q || row.dataset.content.includes(q);
+                            const matchVen = vSel === 'all' || row.dataset.venue === vSel;
+                            
+                            let show = matchTxt && matchVen;
+                            if (show) {{
+                                if (starredOnly) show = isStarred;
+                                else if (currentTab === 'today') show = row.dataset.date === vDayStr;
+                                else if (currentTab === 'month') show = parseInt(row.dataset.month) === vMonth;
+                            }}
+                            row.className = show ? 'event-row' + (isStarred ? ' is-highlighted' : '') : 'event-row hidden';
+                        }}
+                        document.getElementById('nav-row').style.display = (currentTab === 'all' || starredOnly) ? 'none' : 'flex';
+                        document.getElementById('view-label').innerText = currentTab === 'today' ? viewingDate.toLocaleDateString('en-US', {{month:'short', day:'numeric'}}) : viewingDate.toLocaleDateString('en-US', {{month:'long'}});
                     }}
 
-                    window.moveDate = (dir) => {{ if(currentTab==='today') viewingDate.setDate(viewingDate.getDate()+dir); else viewingDate.setMonth(viewingDate.getMonth()+dir); runFilters(); }};
-                    document.querySelectorAll('.tab-btn[data-filter]').forEach(b => b.onclick = (e) => {{
+                    window.moveDate = (dir) => {{ 
+                        if(currentTab==='today') viewingDate.setDate(viewingDate.getDate()+dir); 
+                        else viewingDate.setMonth(viewingDate.getMonth()+dir); 
+                        runFilters(); 
+                    }};
+
+                    document.querySelectorAll('.tab-btn[data-filter]').forEach(b => b.addEventListener('click', (e) => {{
                         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
-                        e.target.classList.add('active'); currentTab = e.target.dataset.filter; runFilters();
+                        e.target.classList.add('active'); 
+                        currentTab = e.target.dataset.filter; 
+                        runFilters();
+                    }}));
+
+                    document.getElementById('search').addEventListener('input', runFilters);
+                    document.getElementById('venue-select').addEventListener('change', runFilters);
+                    document.getElementById('fav-filter').addEventListener('click', function() {{ 
+                        starredOnly = !starredOnly; this.classList.toggle('active'); runFilters(); 
                     }});
-                    document.getElementById('search').oninput = runFilters;
-                    document.getElementById('venue-select').onchange = runFilters;
-                    document.getElementById('fav-filter').onclick = function() {{ starredOnly = !starredOnly; this.classList.toggle('active'); runFilters(); }};
-                    document.addEventListener('click', e => {{ if(e.target.classList.contains('star-btn')) {{ const r = e.target.closest('tr'); r.classList.toggle('is-highlighted'); }} }});
+
+                    // Initialize immediately
                     runFilters();
                 </script></body></html>"""
     finally:
         db.close()
+
+# ... [Keep Admin / Save / Delete routes same as before] ...
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page():
