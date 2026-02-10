@@ -9,6 +9,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from collections import defaultdict
 from datetime import date, datetime
+import pytz
+
+ATL_TZ = pytz.timezone('US/Eastern')
+
 
 Base = declarative_base()
 class Event(Base):
@@ -59,7 +63,7 @@ COMMON_STYLE = """
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     db = SessionLocal()
-    today = date.today()
+    today = datetime.now(ATL_TZ).date()
     try:
         raw_events = db.query(Event).filter(Event.date_time >= today).order_by(Event.date_time).all()
         rows = ""
