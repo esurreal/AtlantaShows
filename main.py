@@ -65,7 +65,17 @@ def read_root():
         rows = ""
         unique_venues = set()
         for e in raw_events:
-            v_filter = "The Masquerade" if "Masquerade" in e.venue_name else ("Center Stage / Loft / Vinyl" if any(x in e.venue_name for x in ["Center Stage", "The Loft", "Vinyl"]) else e.venue_name)
+            # Venue Consolidation Logic
+            v_name = e.venue_name.strip()
+            if "Masquerade" in v_name:
+                v_filter = "The Masquerade"
+            elif any(x in v_name for x in ["Center Stage", "The Loft", "Vinyl"]):
+                v_filter = "Center Stage / Loft / Vinyl"
+            elif v_name.upper() == "THE EARL":
+                v_filter = "The EARL"
+            else:
+                v_filter = v_name
+                
             unique_venues.add(v_filter)
             rows += f"""<tr class="event-row" id="row-{e.tm_id}" data-id="{e.tm_id}" data-date="{e.date_time.isoformat()}" data-venue="{v_filter}" data-month="{e.date_time.month-1}" data-content="{e.name.upper()}">
                 <td><button class="star-btn" onclick="toggleStar('{e.tm_id}')">★</button></td>
@@ -291,7 +301,6 @@ async def bulk_save(data: list = Body(...)):
     for item in data:
         try:
             ds = item['date'].strip()
-            # Handle both Mar 08 and 03-08-2026
             if '-' in ds:
                 dt = datetime.strptime(ds, "%m-%d-%Y").date()
             else:
