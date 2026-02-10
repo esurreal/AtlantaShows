@@ -76,8 +76,8 @@ def read_root():
         
         venue_options = f'<option value="all">All Venues</option>' + "".join([f'<option value="{v}">{v}</option>' for v in sorted(list(unique_venues))])
 
-        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ATL SHOWS</title>{COMMON_STYLE}</head>
-            <body><header><h1>ATL SHOWS</h1></header>
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ATL SHOW FINDER</title>{COMMON_STYLE}</head>
+            <body><header><h1>ATL SHOW FINDER</h1></header>
                 <div class="container">
                     <div class="controls-box">
                         <div style="display:flex; gap:10px; margin-bottom: 10px;">
@@ -104,10 +104,10 @@ def read_root():
                     viewingDate.setHours(0,0,0,0);
                     
                     // --- PERSISTENCE LOGIC ---
-                    let starredIds = new Set(JSON.parse(localStorage.getItem('atl-shows-stars') || '[]'));
+                    let starredIds = new Set(JSON.parse(localStorage.getItem('atl-show-finder-stars') || '[]'));
 
                     function saveStars() {{
-                        localStorage.setItem('atl-shows-stars', JSON.stringify(Array.from(starredIds)));
+                        localStorage.setItem('atl-show-finder-stars', JSON.stringify(Array.from(starredIds)));
                     }}
 
                     function toggleStar(id) {{
