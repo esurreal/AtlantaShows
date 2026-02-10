@@ -9,4 +9,4 @@ python-dotenv
 beautifulsoup4
 playwright
 pytest-playwright
-
+pytz
