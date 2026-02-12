@@ -22,7 +22,7 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-# Venue Constants
+# Venue Constants for Verified Data
 BOGGS = "Boggs Social & Supply"
 EARL = "The EARL"
 V529 = "529"
@@ -33,7 +33,7 @@ T_WEST = "Terminal West"
 VARIETY = "Variety Playhouse"
 
 # ==========================================================
-# MANUALLY VERIFIED SHOWS - PRESERVED AS REQUESTED
+# MANUALLY VERIFIED SHOWS - KEPT AS REQUESTED
 # ==========================================================
 VERIFIED_DATA = {
     V529: [
@@ -240,21 +240,45 @@ VERIFIED_DATA = {
 def fetch_tm():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    q = [{"keyword": "The Masquerade", "city": "Atlanta"}, {"keyword": "Tabernacle", "city": "Atlanta"}]
+    
+    LAT_LONG = "33.7490,-84.3880"
+    RADIUS = "30"
+    
+    # CLASSIFICATION IDs: 
+    # Music: KZFzniwnSyZfZ7v7nJ
+    # Musicals (within Arts & Theatre): genreId KnvZfZ7v7n1
+    segment_ids = "KZFzniwnSyZfZ7v7nJ,KnvZfZ7v7n1"
+    
     res, seen = [], set()
-    for item in q:
+    for page in range(10): 
         try:
-            r = requests.get(f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&keyword={item['keyword']}&city={item['city']}&classificationName=music&size=50")
-            events = r.json().get('_embedded', {}).get('events', [])
+            # BROAD GEO-SEARCH + MUSIC/MUSICALS FILTERING
+            url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&geoPoint={LAT_LONG}&radius={RADIUS}&unit=miles&classificationId={segment_ids}&size=100&page={page}&sort=date,asc"
+            r = requests.get(url)
+            data = r.json()
+            
+            events = data.get('_embedded', {}).get('events', [])
+            if not events:
+                break
+                
             for e in events:
                 if e['id'] not in seen:
-                    res.append({"id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'], "venue": e['_embedded']['venues'][0]['name'], "url": e['url']})
-                    seen.add(e['id'])
-            time.sleep(0.3)
-        except: continue
+                    v_info = e['_embedded']['venues'][0]
+                    if v_info.get('state', {}).get('stateCode') == 'GA':
+                        res.append({
+                            "id": e['id'], 
+                            "name": e['name'], 
+                            "date": e['dates']['start']['localDate'], 
+                            "venue": v_info['name'], 
+                            "url": e['url']
+                        })
+                        seen.add(e['id'])
+            
+            time.sleep(0.3) 
+        except Exception as err:
+            print(f"Error filtering Ticketmaster: {err}")
+            break
     return res
-
-# ... (Keep your imports and VERIFIED_DATA exactly as they are) ...
 
 def build_web_page():
     db = SessionLocal()
@@ -278,52 +302,48 @@ def build_web_page():
         </tr>"""
 
     try:
-        with open("index.html", "r", encoding="utf-8") as f:
-            full_content = f.read()
-        
-        # Use a specific marker to avoid messing up the file
-        if "" in full_content:
-            new_content = full_content.replace("", rows_html)
-            with open("index.html", "w", encoding="utf-8") as f:
-                f.write(new_content)
-            print("[+] Site updated with clean styling.")
-        else:
-            # Fallback if the placeholder is missing: find the tbody
-            if "<tbody>" in full_content:
-                new_content = full_content.replace("<tbody>", f"<tbody>{rows_html}")
+        if os.path.exists("index.html"):
+            with open("index.html", "r", encoding="utf-8") as f:
+                full_content = f.read()
+            
+            if "<tbody>" in full_content and "</tbody>" in full_content:
+                parts = full_content.split("<tbody>")
+                end_part = parts[1].split("</tbody>")
+                new_content = parts[0] + "<tbody>" + rows_html + "</tbody>" + end_part[1]
+                
                 with open("index.html", "w", encoding="utf-8") as f:
                     f.write(new_content)
+                print("[+] Site updated: Music and Musicals only.")
     except Exception as ex:
-        print(f"[!] Error: {ex}")
+        print(f"[!] Build error: {ex}")
     finally:
         db.close()
-
-# ... (Rest of your sync() function remains the same) ...
 
 def sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        tm = fetch_tm()
+        tm_shows = fetch_tm()
         db.query(Event).delete()
         today = date.today()
         
-        # Add TM shows
-        for e in tm:
+        for e in tm_shows:
             dt = datetime.strptime(e['date'], "%Y-%m-%d").date()
-            if dt >= today and not any(v.lower() in e['venue'].lower() for v in ["529", "earl", "boggs"]):
+            if dt >= today:
                 db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
         
-        # Add Manual Verified shows
         links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://freshtix.com", CULT_SHOCK: "https://venuepilot.co", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", MASQ: "https://masqueradeatlanta.com"}
+        
         for venue, shows in VERIFIED_DATA.items():
             for s in shows:
                 dt = datetime.strptime(s['date'], "%Y-%m-%d").date()
                 if dt >= today:
                     db.add(Event(tm_id=f"man-{venue[:3].lower()}-{s['date']}", name=s['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "#")))
+        
         db.commit()
         build_web_page()
-    finally: db.close()
+    finally: 
+        db.close()
 
 if __name__ == "__main__":
     sync()
