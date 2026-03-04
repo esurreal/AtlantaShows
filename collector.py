@@ -37,36 +37,18 @@ VARIETY = "Variety Playhouse"
 # ==========================================================
 VERIFIED_DATA = {
     V529: [
-        {"date": "2026-02-19", "name": "Anti-Sapien / Borzoi / Sewage Bath"},
-        {"date": "2026-02-20", "name": "ENMY / Softspoken / Summer Hoop"},
-        {"date": "2026-02-22", "name": "SUMPP"},
-        {"date": "2026-02-23", "name": "High On Fire / Hot Ram (Night 1)"},
-        {"date": "2026-02-24", "name": "High On Fire / Apostle (Night 2)"},
-        {"date": "2026-02-29", "name": "Graveyard Hours / Triangle Fire"},
-        {"date": "2026-03-01", "name": "Too Hot for Leather / Yevara"},
         {"date": "2026-03-06", "name": "Parachutes / Tiny Banshee"},
         {"date": "2026-03-13", "name": "Breaux / The Catastrophes"},
         {"date": "2026-03-21", "name": "DONEFOR / Red Hot Empty (Live Loud)"},
         {"date": "2026-05-02", "name": "Uada / Mortiis / Rome"}
     ],
     EARL: [
-        {"date": "2026-02-20", "name": "True Blossom / Sleepers Club"},
-        {"date": "2026-02-21", "name": "Nuovo Testamento / Dark Chisme"},
-        {"date": "2026-02-22", "name": "Jake Xerxes Fussell / Dougie Poole"},
-        {"date": "2026-02-24", "name": "Spiritual Cramp / Liberty and Justice"},
-        {"date": "2026-02-26", "name": "Dyskrasia / Normal Bias"},
-        {"date": "2026-02-27", "name": "The Constellations / Anthmz"},
-        {"date": "2026-02-28", "name": "Prison Affair / RMBLR"},
         {"date": "2026-03-04", "name": "The Deslondes / Sabine McCalla"},
         {"date": "2026-03-12", "name": "Twen / Monsoon"},
         {"date": "2026-04-10", "name": "Redd Kross"},
         {"date": "2026-05-04", "name": "Flyte (Rescheduled)"}
     ],
     VARIETY: [
-        {"date": "2026-02-20", "name": "Peter McPoland / Dug"},
-        {"date": "2026-02-21", "name": "Marty Stuart / Hogslop String Band"},
-        {"date": "2026-02-27", "name": "Big Head Todd and The Monsters"},
-        {"date": "2026-02-28", "name": "Billy F. Gibbons & The BFG Band"},
         {"date": "2026-03-14", "name": "Wednesday / Gouge Away (Sold Out)"},
         {"date": "2026-03-21", "name": "Mike Gordon"},
         {"date": "2026-03-26", "name": "Cymande"},
@@ -85,10 +67,19 @@ VERIFIED_DATA = {
         {"date": "2026-05-02", "name": "RAVEN w/ Special Guests Slackjaw", "url": "https://www.freshtix.com/events/raven"},
         {"date": "2026-05-23", "name": "Atlanta Ska Night Volume 8!", "url": "https://www.freshtix.com/events/atlska8"}
     ],
+    CULT_SHOCK: [
+        {"date": "2026-03-07", "name": "Bazooka Tooth (3pm)"},
+        {"date": "2026-03-07", "name": "Weekend Evidence (7pm)"},
+        {"date": "2026-03-12", "name": "Direct Measure"},
+        {"date": "2026-03-14", "name": "SinThya"},
+        {"date": "2026-03-16", "name": "Weeping"},
+        {"date": "2026-03-18", "name": "SWAG IS BACK TOUR"},
+        {"date": "2026-03-20", "name": "Bullshit Detector"},
+        {"date": "2026-03-28", "name": "Vile Mind / Power of Fear"},
+        {"date": "2026-04-23", "name": "Sneaky Miles"},
+        {"date": "2026-05-19", "name": "Paisley Fields"}
+    ],
     EASTERN: [
-        {"date": "2026-02-25", "name": "Jesse Welles / S.G. Goodman"},
-        {"date": "2026-02-27", "name": "STS9 w/ Lotus (Night 1)"},
-        {"date": "2026-02-28", "name": "STS9 w/ Lotus (Night 2)"},
         {"date": "2026-03-07", "name": "Machine Girl / Show Me The Body"},
         {"date": "2026-04-17", "name": "Acid Bath / Crowbar / Eyehategod"},
         {"date": "2026-06-13", "name": "The Last Dinner Party"}
@@ -98,15 +89,10 @@ VERIFIED_DATA = {
 def fetch_tm():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    LAT_LONG = "33.7490,-84.3880"
-    RADIUS = "30"
-    # Music (KZFzniwnSyZfZ7v7nJ) and Musicals (KnvZfZ7v7n1)
-    segment_ids = "KZFzniwnSyZfZ7v7nJ,KnvZfZ7v7n1"
-    
     res, seen = [], set()
     for page in range(10): 
         try:
-            url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&geoPoint={LAT_LONG}&radius={RADIUS}&unit=miles&classificationId={segment_ids}&size=100&page={page}&sort=date,asc"
+            url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&geoPoint=33.7490,-84.3880&radius=30&unit=miles&classificationId=KZFzniwnSyZfZ7v7nJ,KnvZfZ7v7n1&size=100&page={page}&sort=date,asc"
             r = requests.get(url)
             data = r.json()
             events = data.get('_embedded', {}).get('events', [])
@@ -153,7 +139,15 @@ def sync():
             if dt >= today: db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
         
         # Generic Venue Links
-        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://www.freshtix.com/search?category=&end=&query=the+EARL&start=&state=GA", BOGGS: "https://www.freshtix.com/search?category=&end=&query=Boggs%20Social&start=&state=GA", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", CULT_SHOCK: "https://cultureshockatl.com/#/events/"}
+        links = {
+            V529: "https://529atlanta.com/calendar/", 
+            EARL: "https://www.freshtix.com/search?category=&end=&query=the+EARL&start=&state=GA", 
+            BOGGS: "https://www.freshtix.com/search?utf8=%E2%9C%93&query=boggs&commit=Search&start=&end=&state=GA&category=", 
+            EASTERN: "https://easternatl.com", 
+            T_WEST: "https://terminalwestatl.com", 
+            VARIETY: "https://varietyplayhouse.com", 
+            CULT_SHOCK: "https://cultureshockatl.com/#/events" # Updated to your specific page
+        }
         
         # Process Verified Data
         for venue, shows in VERIFIED_DATA.items():
@@ -161,8 +155,13 @@ def sync():
                 dt = datetime.strptime(s['date'], "%Y-%m-%d").date()
                 if dt >= today:
                     # Use specific URL if provided, otherwise fallback to venue generic link
-                    t_url = s.get('url', links.get(venue, "#"))
-                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{s['date']}", name=s['name'], date_time=dt, venue_name=venue, ticket_url=t_url))
+                    t_url = s.get('url', links.get(venue, "https://www.freshtix.com/events/arippinproduction"))
+                    
+                    # Fix for multiple shows on same day: Add slug to ID
+                    slug = s['name'][:4].lower().replace(" ", "")
+                    uid = f"man-{venue[:3].lower()}-{s['date']}-{slug}"
+                    
+                    db.add(Event(tm_id=uid, name=s['name'], date_time=dt, venue_name=venue, ticket_url=t_url))
         
         db.commit()
         build_web_page()
