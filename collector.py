@@ -153,7 +153,7 @@ def sync():
             if dt >= today: db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
         
         # Generic Venue Links
-        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/https://www.freshtix.com/search?category=&end=&query=the+EARL&start=&state=GA", BOGGS: "https://www.freshtix.com/search?category=&end=&query=Boggs%20Social&start=&state=GA", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", CULT_SHOCK: "https://cultureshockatl.com/#/events/"}
+        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://www.freshtix.com/search?category=&end=&query=the+EARL&start=&state=GA", BOGGS: "https://www.freshtix.com/search?category=&end=&query=Boggs%20Social&start=&state=GA", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", CULT_SHOCK: "https://cultureshockatl.com/#/events/"}
         
         # Process Verified Data
         for venue, shows in VERIFIED_DATA.items():
