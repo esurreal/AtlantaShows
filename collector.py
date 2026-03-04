@@ -22,7 +22,7 @@ db_url = raw_db_url.replace("postgres://", "postgresql://", 1) if "postgres://" 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(bind=engine)
 
-# Venue Constants for Verified Data
+# Venue Constants
 BOGGS = "Boggs Social & Supply"
 EARL = "The EARL"
 V529 = "529"
@@ -33,10 +33,32 @@ T_WEST = "Terminal West"
 VARIETY = "Variety Playhouse"
 
 # ==========================================================
-# MANUALLY VERIFIED SHOWS - KEPT AS REQUESTED
+# MANUALLY VERIFIED SHOWS - RESTORED & UPDATED
 # ==========================================================
 VERIFIED_DATA = {
     V529: [
+        {"date": "2026-01-03", "name": "Edwin & My Folks / Rahbi"},
+        {"date": "2026-01-08", "name": "Downbeats & Distortions / Lovehex"},
+        {"date": "2026-01-09", "name": "The Taj Motel Trio / Analog Day Dream"},
+        {"date": "2026-01-10", "name": "Nick Nasty / Close To Midnight"},
+        {"date": "2026-01-15", "name": "Elysium / After All This / Winder"},
+        {"date": "2026-01-16", "name": "Unfaced Ree / Phamily & Friends"},
+        {"date": "2026-01-18", "name": "The Warsaw Clinic / Dirty Holly"},
+        {"date": "2026-01-19", "name": "Anti-Sapien / Borzoi / Sewage Bath"},
+        {"date": "2026-01-20", "name": "ENMY / Softspoken / Summer Hoop"},
+        {"date": "2026-01-22", "name": "SUMPP"},
+        {"date": "2026-01-23", "name": "High On Fire / Hot Ram (Night 1)"},
+        {"date": "2026-01-24", "name": "High On Fire / Apostle (Night 2)"},
+        {"date": "2026-01-29", "name": "Graveyard Hours / Triangle Fire"},
+        {"date": "2026-01-30", "name": "Joshua Quimby"},
+        {"date": "2026-01-31", "name": "Too Hot for Leather / Yevara"},
+        {"date": "2026-02-06", "name": "Parachutes / Tiny Banshee"},
+        {"date": "2026-02-13", "name": "Breaux / The Catastrophes"},
+        {"date": "2026-02-15", "name": "Hearts Gone South / Sid Jerr-Dan"},
+        {"date": "2026-02-24", "name": "A Killer's Confession / Saints of Solomon"},
+        {"date": "2026-02-27", "name": "Makes My Blood Dance / The Unknown"},
+        {"date": "2026-02-28", "name": "Yosemite In Black / Resistor"},
+        {"date": "2026-03-01", "name": "Vicious Rumors / Paladin / Jaeger"},
         {"date": "2026-03-06", "name": "The Pentagram String Band"},
         {"date": "2026-03-08", "name": "Ventana / Aeternum"},
         {"date": "2026-03-13", "name": "Bible Belt Massacre / Vickis Dream"},
@@ -45,6 +67,34 @@ VERIFIED_DATA = {
         {"date": "2026-05-02", "name": "Uada / Mortiis / Rome"}
     ],
     EARL: [
+        {"date": "2026-01-09", "name": "Numbers Station Records Showcase"},
+        {"date": "2026-01-10", "name": "Gringo Star / The Sporrs"},
+        {"date": "2026-01-11", "name": "The Last Revel"},
+        {"date": "2026-01-15", "name": "Rod Hamdallah / Chester Leathers"},
+        {"date": "2026-01-16", "name": "Pissed Jeans / Morgan Garrett"},
+        {"date": "2026-01-17", "name": "Country Westerns / Ultra Lights"},
+        {"date": "2026-01-19", "name": "Modern Nature / Brigid Dawson"},
+        {"date": "2026-01-20", "name": "Friendship / Little Mazarn"},
+        {"date": "2026-01-21", "name": "Shiner / Dropsonic / Bursting"},
+        {"date": "2026-01-22", "name": "Off With Their Heads / Smug LLC"},
+        {"date": "2026-01-23", "name": "Sean Rowe / Slow Parade"},
+        {"date": "2026-01-24", "name": "Vio-lence / Deceased / Nunslaughter"},
+        {"date": "2026-01-25", "name": "Low Water Bridge Band"},
+        {"date": "2026-01-30", "name": "God Bullies / Vincas / Rubber Udder"},
+        {"date": "2026-01-31", "name": "K Michelle Dubois / Gouwzee"},
+        {"date": "2026-02-05", "name": "Taper's Choice / Rich Ruth"},
+        {"date": "2026-02-06", "name": "Matt Pryor / Small Uncle"},
+        {"date": "2026-02-07", "name": "Bad Bad Hats / Smut"},
+        {"date": "2026-02-11", "name": "Venus & The Flytraps"},
+        {"date": "2026-02-12", "name": "Robin Shakedown (El Refugio Benefit)"},
+        {"date": "2026-02-13", "name": "James Hall & The Steady Wicked"},
+        {"date": "2026-02-20", "name": "True Blossom / Sleepers Club"},
+        {"date": "2026-02-21", "name": "Nuovo Testamento / Dark Chisme"},
+        {"date": "2026-02-22", "name": "Jake Xerxes Fussell / Dougie Poole"},
+        {"date": "2026-02-24", "name": "Spiritual Cramp / Liberty and Justice"},
+        {"date": "2026-02-26", "name": "Dyskrasia / Normal Bias"},
+        {"date": "2026-02-27", "name": "The Constellations / Anthmz"},
+        {"date": "2026-02-28", "name": "Prison Affair / RMBLR"},
         {"date": "2026-03-04", "name": "The Deslondes / Sabine McCalla"},
         {"date": "2026-03-05", "name": "Daiseychain / Reverends"},
         {"date": "2026-03-12", "name": "Twen / Monsoon"},
@@ -65,6 +115,25 @@ VERIFIED_DATA = {
         {"date": "2026-05-04", "name": "Flyte (Rescheduled)"}
     ],
     VARIETY: [
+        {"date": "2026-01-10", "name": "Big Mike Geier's Elvis Royale (Night 1)"},
+        {"date": "2026-01-11", "name": "Big Mike Geier's Elvis Royale (Night 2)"},
+        {"date": "2026-01-16", "name": "Magic City Hippies / Supertaste"},
+        {"date": "2026-01-17", "name": "Spafford / Frute"},
+        {"date": "2026-01-23", "name": "Leo Kottke"},
+        {"date": "2026-01-24", "name": "The Sundogs (Tom Petty Tribute)"},
+        {"date": "2026-01-29", "name": "Goldford / Madeline Edwards"},
+        {"date": "2026-01-30", "name": "Nacho Redondo"},
+        {"date": "2026-02-03", "name": "James McMurtry / Bettysoo"},
+        {"date": "2026-02-05", "name": "Don Was & The Pan-Detroit Ensemble"},
+        {"date": "2026-02-07", "name": "The Movement / Tropidelic"},
+        {"date": "2026-02-13", "name": "Smithsonian & The Remakes (Night 1)"},
+        {"date": "2026-02-14", "name": "Smithsonian & The Remakes (Night 2)"},
+        {"date": "2026-02-15", "name": "Rory Scovel"},
+        {"date": "2026-02-20", "name": "Peter McPoland / Dug"},
+        {"date": "2026-02-21", "name": "Marty Stuart / Hogslop String Band"},
+        {"date": "2026-02-27", "name": "Big Head Todd and The Monsters"},
+        {"date": "2026-02-28", "name": "Billy F. Gibbons & The BFG Band"},
+        {"date": "2026-03-03", "name": "Evan Honer / Harf."},
         {"date": "2026-03-07", "name": "SunSquabi + Manic Focus"},
         {"date": "2026-03-10", "name": "Jordan Jensen"},
         {"date": "2026-03-13", "name": "Drivin' N' Cryin'"},
@@ -94,6 +163,14 @@ VERIFIED_DATA = {
         {"date": "2026-10-22", "name": "Benjamin Tod & The Inline Six"}
     ],
     BOGGS: [
+        {"date": "2026-01-09", "name": "ozello / Kyle Lewis"},
+        {"date": "2026-01-10", "name": "Elijah Cruise / MENU"},
+        {"date": "2026-01-17", "name": "The Carolyn / Knives"},
+        {"date": "2026-01-23", "name": "Empty Parking Lot / Lqm"},
+        {"date": "2026-01-31", "name": "Palaces / Muelas"},
+        {"date": "2026-02-05", "name": "Ritual Arcana (Wino)"},
+        {"date": "2026-02-06", "name": "Atoll / Truckstop Dickpill"},
+        {"date": "2026-02-07", "name": "Temple of Love / Black Fractal"},
         {"date": "2026-03-03", "name": "Temptress / Friendship Commanders"},
         {"date": "2026-03-06", "name": "Author & Punisher / King Yosef"},
         {"date": "2026-03-07", "name": "HAMMERHEAD FEST XIV"},
@@ -114,10 +191,13 @@ VERIFIED_DATA = {
         {"date": "2026-06-04", "name": "Conjurer / Sadness / Snooze"}
     ],
     CULT_SHOCK: [
-        {"date": "2026-03-07", "name": "Bazooka Tooth (3:00 PM)"},
-        {"date": "2026-03-07", "name": "Weekend Evidence (7:00 PM)"},
+        {"date": "2026-01-18", "name": "Second Death / Cruel Bones"},
+        {"date": "2026-01-31", "name": "Los Ojos Muertos"},
+        {"date": "2026-02-20", "name": "SinThya / Endeavor Into the Dark"},
+        {"date": "2026-03-07", "name": "Bazooka Tooth / Hubris Cannon (3pm)"},
+        {"date": "2026-03-07", "name": "Weekend Evidence (7pm)"},
         {"date": "2026-03-12", "name": "Direct Measure"},
-        {"date": "2026-03-14", "name": "SinThya"},
+        {"date": "2026-03-14", "name": "SinThya (Return Show)"},
         {"date": "2026-03-16", "name": "Weeping"},
         {"date": "2026-03-18", "name": "SWAG IS BACK TOUR"},
         {"date": "2026-03-20", "name": "Bullshit Detector / Antagonizers"},
@@ -131,57 +211,19 @@ VERIFIED_DATA = {
         {"date": "2026-03-07", "name": "Machine Girl / Show Me The Body"},
         {"date": "2026-03-08", "name": "Pink Martini"},
         {"date": "2026-03-12", "name": "Cat Power"},
-        {"date": "2026-03-13", "name": "Levity Presents Lasership (Night 1)"},
-        {"date": "2026-03-14", "name": "Levity Presents Lasership (Night 2)"},
-        {"date": "2026-03-17", "name": "Rainbow Kitten Surprise (Night 1)"},
-        {"date": "2026-03-18", "name": "Rainbow Kitten Surprise (Night 2)"},
-        {"date": "2026-03-21", "name": "Level Up x Zingara"},
-        {"date": "2026-04-03", "name": "William Black"},
-        {"date": "2026-04-04", "name": "The Format / Ben Kweller"},
-        {"date": "2026-04-08", "name": "Snarky Puppy"},
-        {"date": "2026-04-16", "name": "Charles Wesley Godwin"},
-        {"date": "2026-04-17", "name": "Acid Bath / Crowbar / Eyehategod"},
-        {"date": "2026-04-18", "name": "The Midnight: Time Machines"},
-        {"date": "2026-04-24", "name": "Panchiko / Rehash"},
-        {"date": "2026-05-08", "name": "St. Paul & The Broken Bones"},
-        {"date": "2026-05-09", "name": "moe."},
-        {"date": "2026-05-13", "name": "Mac DeMarco (Sold Out)"},
-        {"date": "2026-06-13", "name": "The Last Dinner Party"}
+        {"date": "2026-04-17", "name": "Acid Bath / Crowbar / Eyehategod"}
     ]
 }
 
 def fetch_tm():
     api_key = os.getenv("TM_API_KEY")
     if not api_key: return []
-    LAT_LONG = "33.7490,-84.3880"
-    RADIUS = "30"
-    segment_ids = "KZFzniwnSyZfZ7v7nJ,KnvZfZ7v7n1"
-    res, seen = [], set()
-    for page in range(10): 
-        try:
-            url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&geoPoint={LAT_LONG}&radius={RADIUS}&unit=miles&classificationId={segment_ids}&size=100&page={page}&sort=date,asc"
-            r = requests.get(url)
-            data = r.json()
-            events = data.get('_embedded', {}).get('events', [])
-            if not events:
-                break
-            for e in events:
-                if e['id'] not in seen:
-                    v_info = e['_embedded']['venues'][0]
-                    if v_info.get('state', {}).get('stateCode') == 'GA':
-                        res.append({
-                            "id": e['id'], 
-                            "name": e['name'], 
-                            "date": e['dates']['start']['localDate'], 
-                            "venue": v_info['name'], 
-                            "url": e['url']
-                        })
-                        seen.add(e['id'])
-            time.sleep(0.3) 
-        except Exception as err:
-            print(f"Error filtering Ticketmaster: {err}")
-            break
-    return res
+    try:
+        url = f"https://app.ticketmaster.com/discovery/v2/events.json?apikey={api_key}&geoPoint=33.7490,-84.3880&radius=30&unit=miles&classificationId=KZFzniwnSyZfZ7v7nJ,KnvZfZ7v7n1&size=100&sort=date,asc"
+        r = requests.get(url)
+        events = r.json().get('_embedded', {}).get('events', [])
+        return [{"id": e['id'], "name": e['name'], "date": e['dates']['start']['localDate'], "venue": e['_embedded']['venues'][0]['name'], "url": e['url']} for e in events if e['_embedded']['venues'][0].get('state', {}).get('stateCode') == 'GA']
+    except: return []
 
 def build_web_page():
     db = SessionLocal()
@@ -191,58 +233,42 @@ def build_web_page():
         clean_name = e.name.replace("/", "-")
         ics = f"BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nSUMMARY:{clean_name}\\nDTSTART:{e.date_time.strftime('%Y%m%d')}T200000\\nLOCATION:{e.venue_name}\\nEND:VEVENT\\nEND:VCALENDAR"
         cal_uri = f"data:text/calendar;charset=utf8,{urllib.parse.quote(ics)}"
-        rows_html += f"""
-        <tr>
-            <td class="date-cell">{e.date_time.strftime("%a, %b %d")}</td>
-            <td class="lineup-cell">{e.name}</td>
-            <td class="venue-cell">{e.venue_name}</td>
-            <td>
-                <a href="{e.ticket_url}" target="_blank" class="btn-link">Tickets</a>
-                <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="btn-cal">📅 Cal</a>
-            </td>
-        </tr>"""
-    try:
-        if os.path.exists("index.html"):
-            with open("index.html", "r", encoding="utf-8") as f:
-                full_content = f.read()
-            if "<tbody>" in full_content and "</tbody>" in full_content:
-                parts = full_content.split("<tbody>")
-                end_part = parts[1].split("</tbody>")
-                new_content = parts[0] + "<tbody>" + rows_html + "</tbody>" + end_part[1]
-                with open("index.html", "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                print("[+] Site updated.")
-    except Exception as ex:
-        print(f"[!] Build error: {ex}")
-    finally:
-        db.close()
+        rows_html += f'<tr><td class="date-cell">{e.date_time.strftime("%a, %b %d")}</td><td class="lineup-cell">{e.name}</td><td class="venue-cell">{e.venue_name}</td><td><a href="{e.ticket_url}" target="_blank" class="btn-link">Tickets</a> <a href="{cal_uri}" download="{clean_name[:10]}.ics" class="btn-cal">📅 Cal</a></td></tr>'
+    
+    if os.path.exists("index.html"):
+        with open("index.html", "r", encoding="utf-8") as f: content = f.read()
+        # FIX: Matching your specific id-tagged tbody
+        if '<tbody id="shows-body">' in content:
+            parts = content.split('<tbody id="shows-body">')
+            end_part = parts[1].split('</tbody>')
+            new_content = parts[0] + '<tbody id="shows-body">' + rows_html + '</tbody>' + end_part[1]
+            with open("index.html", "w", encoding="utf-8") as f: f.write(new_content)
+            print("[+] Site updated with unique IDs for matinees!")
+    db.close()
 
 def sync():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        tm_shows = fetch_tm()
         db.query(Event).delete()
         today = date.today()
-        for e in tm_shows:
+        # TM
+        for e in fetch_tm():
             dt = datetime.strptime(e['date'], "%Y-%m-%d").date()
-            if dt >= today:
-                db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
-        
-        links = {V529: "https://529atlanta.com/calendar/", EARL: "https://badearl.freshtix.com/", BOGGS: "https://freshtix.com", CULT_SHOCK: "https://venuepilot.co", EASTERN: "https://easternatl.com", T_WEST: "https://terminalwestatl.com", VARIETY: "https://varietyplayhouse.com", MASQ: "https://masqueradeatlanta.com"}
-        
+            if dt >= today: db.add(Event(tm_id=e['id'], name=e['name'], date_time=dt, venue_name=e['venue'], ticket_url=e['url']))
+        # Manual
+        links = {V529: "https://529atlanta.com", EARL: "https://badearl.freshtix.com", BOGGS: "https://freshtix.com", CULT_SHOCK: "https://venuepilot.co"}
         for venue, shows in VERIFIED_DATA.items():
             for s in shows:
                 dt = datetime.strptime(s['date'], "%Y-%m-%d").date()
                 if dt >= today:
-                    # UPDATED ID LOGIC: venue + date + band snippet to prevent matinee collisions
-                    band_id = s['name'][:5].lower().replace(" ", "")
-                    db.add(Event(tm_id=f"man-{venue[:3].lower()}-{s['date']}-{band_id}", name=s['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "#")))
-        
+                    # FIX: Unique ID using first 4 letters of band name to allow same-day multiple shows
+                    band_id = s['name'][:4].lower().replace(" ", "")
+                    uid = f"man-{venue[:3].lower()}-{s['date']}-{band_id}"
+                    db.add(Event(tm_id=uid, name=s['name'], date_time=dt, venue_name=venue, ticket_url=links.get(venue, "#")))
         db.commit()
         build_web_page()
-    finally: 
-        db.close()
+    finally: db.close()
 
 if __name__ == "__main__":
     sync()
